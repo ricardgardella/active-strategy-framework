@@ -28,7 +28,7 @@ You will then modify the following functions:
 
 To update the data vs. the one stored in this repo you will need to sign up at [Bitquery](https://graphql.bitquery.io/ide) and save your API key in a file called ```config.py``` in this directory, as a string: ```BITQUERY_API_TOKEN = XXXXXXXX```, and set ```DOWNLOAD_DATA      = True``` in the notebook. You can debug by looking at the ```strategy.log``` output file which prints details at each rebalance.
 
-## Use With Any Uniswap v3 Pair
+## Simulate With Any Uniswap v3 Pair
 
 The current implementation is very flexible, but due to data constraints is currently programmed to analyze the WETH-USDC 0.3% fee tier pool. If you want to generate this for a different pool, you must generate a new FlipsideCrypto query like the one [from this example](https://app.flipsidecrypto.com/velocity/queries/b8ad3087-803a-478b-9ed3-c4f3c096bc47), with the ```pool_address``` for the pair that you are interested in and modify the ```get_liquidity_flipside``` function from ```GetPoolData```.
 
