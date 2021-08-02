@@ -12,7 +12,7 @@ This repository contains several python scripts that are used by [Gamma Strategi
 
 In order to show usage, we have included a Jupyter Notebook ```Strategy_simlation_example.ipynb``` which runs an example 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
 
-We have constructed a flexible template for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5 2021 is when swap data starts to show up consistently). 
+We have constructed a flexible framework for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5 2021 is when swap data starts to show up consistently). 
 
 
 ## Simulating your own strategy
