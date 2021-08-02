@@ -7,7 +7,7 @@
 This repository contains several python scripts that are used by [Gamma Strategies](https://medium.com/gamma-strategies) to simulate the performance of Uniswap v3 liquidity provision strategies' performance and evaluate risks. The main scripts of the package are:
 
 1. ```StrategyImplementer.py``` which performs the simulations and extracts the statistics necesary for analysis. This file can be modified to implement any LP strategy, and it will be simulated with this code.
-2. ```GetPoolData.py``` which downloads the data necessary for the simulations from Bitquery and Flipside
+2. ```GetPoolData.py``` which downloads the data necessary for the simulations from Bitquery and Flipside Crypto
 3. ```UNI_v3_funcs.py``` which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
 
 In order to show usage, we have included a Jupyter Notebook ```Strategy_simlation_example.ipynb``` which runs an example 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
@@ -30,7 +30,7 @@ To update the data vs. the one stored in this repo you will need to sign up at [
 
 ## Simulate With Any Uniswap v3 Pair
 
-The current implementation is very flexible, but due to data constraints is currently programmed to analyze the WETH-USDC 0.3% fee tier pool. If you want to generate this for a different pool, you must generate a new FlipsideCrypto query like the one [from this example](https://app.flipsidecrypto.com/velocity/queries/b8ad3087-803a-478b-9ed3-c4f3c096bc47), with the ```pool_address``` for the pair that you are interested in and modify the ```get_liquidity_flipside``` function from ```GetPoolData```.
+The current implementation is very flexible, but due to data constraints is currently programmed to analyze the WETH-USDC 0.3% fee tier pool. If you want to generate this for a different pool, you must generate a new Flipside Crypto query like the one [from this example](https://app.flipsidecrypto.com/velocity/queries/b8ad3087-803a-478b-9ed3-c4f3c096bc47), with the ```pool_address``` for the pair that you are interested in and modify the ```get_liquidity_flipside``` function from ```GetPoolData```.
 
 ## Potential Sources of inaccurracy
 
