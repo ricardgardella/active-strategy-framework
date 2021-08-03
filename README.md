@@ -17,7 +17,7 @@ We have constructed a flexible framework for active LP strategy simulations that
 
 ## Simulating your own strategy
 
-In order to simulate your own strategy you should clone this repository to your local computer, and implement your algorithm in the ```StrategyImplementer.py``` script. This script implements a ```StrategyObvservation``` object that for each time period stores the state of the strategy, accumulated fees and all relevant variables, as well as performing the rebalancing logic.
+In order to simulate your own strategy you should clone this repository to your local computer, and implement your algorithm in the [StrategyImplementer.py](StrategyImplementer.py) script. This script implements a ```StrategyObvservation``` object that for each time period stores the state of the strategy, accumulated fees and all relevant variables, as well as performing the rebalancing logic.
 
 The template is currently adapted to the strategies used by [Visor Finance's Hypervisor](https://github.com/VisorFinance/hypervisor), which set a base liquidity provision position, and a limit one with the tokens that are left over as may occur due to concentrated liquidity math and single sided deposits, but this could be generalized as well.
 
