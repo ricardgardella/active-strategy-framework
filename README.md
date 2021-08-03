@@ -6,13 +6,13 @@
 
 This repository contains several python scripts that are used by [Gamma Strategies](https://medium.com/gamma-strategies) to simulate the performance of Uniswap v3 liquidity provision strategies' performance and evaluate risks. The main scripts of the package are:
 
-1. ```StrategyImplementer.py``` which performs the simulations and extracts the statistics necesary for analysis. This file can be modified to implement any LP strategy, and it will be simulated with this code.
-2. ```GetPoolData.py``` which downloads the data necessary for the simulations from Bitquery and Flipside Crypto.
-3. ```UNI_v3_funcs.py``` which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
+1. [StrategyImplementer.py](StrategyImplementer.py) which performs the simulations and extracts the statistics necesary for analysis. This file can be modified to implement any LP strategy, and it will be simulated with this code.
+2. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from Bitquery and Flipside Crypto.
+3. [UNI_v3_funcs.py](UNI_v3_funcs.py) which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
 
-In order to show usage, we have included a Jupyter Notebook ```Strategy_simlation_example.ipynb``` which runs an example 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
+In order to provide an illustration of potential usage, we have included a Jupyter Notebook [Strategy_simlation_example.ipynb](Strategy_simlation_example.ipynb) which runs an simple 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
 
-We have constructed a flexible framework for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5 2021 is when swap data starts to show up consistently). 
+We have constructed a flexible framework for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy of fee income. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5th 2021 is when swap data starts to show up consistently). 
 
 
 ## Simulating your own strategy
