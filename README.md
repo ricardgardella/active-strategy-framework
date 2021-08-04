@@ -1,4 +1,4 @@
-# Gamma Strategies - Uniswap v3 Strategy Framework and Simulator
+# Uniswap v3 Active Strategy Framework and Simulator
 
 ![Banner](https://user-images.githubusercontent.com/80003108/127793159-abdcfad8-4e74-4554-8427-24b5569898ec.png)
 
