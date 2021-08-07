@@ -14,7 +14,6 @@ logging.basicConfig(filename='strategy.log',level=logging.DEBUG)
 #
 ##################
 
-
 class StrategyObvservation:
     def __init__(self,timepoint,current_price,base_range_lower,base_range_upper,limit_range_lower,limit_range_upper,
          reset_range_lower,reset_range_upper,ecdf,inverse_ecdf,alpha_param,tau_param,limit_parameter,
@@ -437,6 +436,7 @@ def aggregate_time(data,minutes = 10):
 def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
     price_data_aggregated                 = data[aggregate_time(data['time'],minutes)].copy()
     price_data_aggregated['price_return'] = (price_data_aggregated['price'].pct_change())
+    price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
     price_data_filtered                   = price_data_full[ (price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
