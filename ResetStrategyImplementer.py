@@ -14,7 +14,6 @@ logging.basicConfig(filename='strategy.log',level=logging.DEBUG)
 #
 ##################
 
-
 class StrategyObvservation:
     def __init__(self,timepoint,current_price,base_range_lower,base_range_upper,limit_range_lower,limit_range_upper,
          reset_range_lower,reset_range_upper,ecdf,inverse_ecdf,alpha_param,tau_param,limit_parameter,
@@ -274,9 +273,6 @@ class StrategyObvservation:
             
             liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
             limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)        
-        
-        total_token_0_amount  -= limit_amount_0
-        total_token_1_amount  -= limit_amount_1
 
         limit_liq_range =       {'price'             : self.price,
                                 'lower_bin_tick'     : TICK_A,
@@ -289,9 +285,13 @@ class StrategyObvservation:
         save_ranges.append(limit_liq_range)
         
         logging.debug('******** LIMIT LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,self.liquidity_in_0))
-        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,self.liquidity_in_1))
+        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
+        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_0_amount))
         logging.debug("Liquidity: {}".format(liquidity_placed))
+        
+        total_token_0_amount  -= limit_amount_0
+        total_token_1_amount  -= limit_amount_1
+        
         
         # Check we didn't allocate more liquidiqity than available
         
@@ -437,6 +437,7 @@ def aggregate_time(data,minutes = 10):
 def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
     price_data_aggregated                 = data[aggregate_time(data['time'],minutes)].copy()
     price_data_aggregated['price_return'] = (price_data_aggregated['price'].pct_change())
+    price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
     price_data_filtered                   = price_data_full[ (price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered

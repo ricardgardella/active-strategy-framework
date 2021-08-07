@@ -19,7 +19,6 @@ def get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA=False):
     request_swap = []
     
     if DOWNLOAD_DATA:
-        
             for i in range(len(block_height_limits)-1): 
                 event = "Mint"
                 request_mint.append(run_query(generate_event_payload(event,contract_address,block_height_limits[i],block_height_limits[i+1]),api_token))
@@ -84,39 +83,27 @@ def process_mint_burn_data(request_mint_in,request_burn_in):
     ##############################################################
     
     # Mint
-    wrong_inputs  = mint_data[mint_data['amount'].str.contains('x',na=False)].index
+    wrong_inputs   = mint_data[mint_data['amount'].str.contains('x',na=False)].index
     mint_data      = mint_data.drop(wrong_inputs)
     
-    wrong_inputs = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
+    wrong_inputs   = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
     mint_data      = mint_data.drop(wrong_inputs)
     
-    wrong_inputs = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
+    wrong_inputs   = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
     mint_data      = mint_data.drop(wrong_inputs)
 
     # Burn
-    wrong_inputs = burn_data[burn_data['amount'].str.contains('x',na=False)].index
-    burn_data           = burn_data.drop(wrong_inputs)
-    
-    wrong_inputs = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
+    wrong_inputs   = burn_data[burn_data['amount'].str.contains('x',na=False)].index
     burn_data      = burn_data.drop(wrong_inputs)
     
-    wrong_inputs = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
+    wrong_inputs   = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
     burn_data      = burn_data.drop(wrong_inputs)
     
-    
-    # Convert amounts in burn to negative to compute cumulatie liquidity
-    mint_data['amount'] =  mint_data['amount'].astype(float)
-    burn_data['amount'] =  burn_data['amount'].astype(float)
-    
-    mint_data['amount_for_calc'] =  mint_data['amount']
-    burn_data['amount_for_calc'] = -burn_data['amount']
+    wrong_inputs   = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
+    burn_data      = burn_data.drop(wrong_inputs)
 
     # Merge Mint burn data
     mb_data = pd.concat([mint_data,burn_data])
-    
-    # Save ticks as integers
-    mb_data['tickLower'] = mb_data['tickLower'].astype(float)
-    mb_data['tickUpper'] = mb_data['tickUpper'].astype(float)
     
     return mb_data
 
@@ -153,31 +140,17 @@ def get_pool_data_mint_burn(contract_address,api_token,DOWNLOAD_DATA = False):
     request_mint,request_burn,request_swap = get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA)
     
     mb_data           = process_mint_burn_data(request_mint,request_burn)
-    mb_data_max_block = mb_data[['block','cumulative_liquidity']].groupby('block').last()    
-    
     swap_data         = process_swap_data(request_swap)
-    full_data         = pd.merge_asof(swap_data,mb_data_max_block,on='block',direction='backward',allow_exact_matches = False)
-
-    # Remove swap with wrong inputs
-    wrong_inputs               = full_data[full_data['amount0'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['amount1'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['tick'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-
-    DECIMALS_0 = 6
-    DECIMALS_1 = 18
-    FEE_TIER   = 0.0003
-
-    full_data['amount0']       = full_data['amount0'].astype(float)
-    full_data['amount1']       = full_data['amount1'].astype(float)
-    full_data['tick']          = full_data['tick'].astype(float)
-    full_data['token_in']      = full_data.apply(lambda x: 'token0' if (x['amount0'] < 0) else 'token1',axis=1)
-    full_data['traded_in']     = full_data.apply(lambda x: -x['amount0']/(10**DECIMALS_0) if (x['amount0'] < 0) else -x['amount1']/(10**DECIMALS_1),axis=1)
-    full_data['traded_out']    = full_data.apply(lambda x:  x['amount0']/(10**DECIMALS_0) if (x['amount0'] > 0) else  x['amount1']/(10**DECIMALS_1),axis=1)
     
-    return full_data
+    # Remove swap with wrong inputs
+    wrong_inputs               = swap_data[swap_data['amount0'].str.contains('x')].index
+    swap_data                  = swap_data.drop(wrong_inputs)
+    wrong_inputs               = swap_data[swap_data['amount1'].str.contains('x')].index
+    swap_data                  = swap_data.drop(wrong_inputs)
+    wrong_inputs               = swap_data[swap_data['tick'].str.contains('x')].index
+    swap_data                  = swap_data.drop(wrong_inputs)
+    
+    return swap_data,mb_data
 
 ##############################################################
 # Get Pool Virtual Liquidity Data using Flipside Data Pool Stats Table
