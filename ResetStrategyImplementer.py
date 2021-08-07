@@ -273,9 +273,6 @@ class StrategyObvservation:
             
             liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
             limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)        
-        
-        total_token_0_amount  -= limit_amount_0
-        total_token_1_amount  -= limit_amount_1
 
         limit_liq_range =       {'price'             : self.price,
                                 'lower_bin_tick'     : TICK_A,
@@ -288,9 +285,13 @@ class StrategyObvservation:
         save_ranges.append(limit_liq_range)
         
         logging.debug('******** LIMIT LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,self.liquidity_in_0))
-        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,self.liquidity_in_1))
+        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
+        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_0_amount))
         logging.debug("Liquidity: {}".format(liquidity_placed))
+        
+        total_token_0_amount  -= limit_amount_0
+        total_token_1_amount  -= limit_amount_1
+        
         
         # Check we didn't allocate more liquidiqity than available
         
