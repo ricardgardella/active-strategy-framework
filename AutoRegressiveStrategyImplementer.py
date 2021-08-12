@@ -4,7 +4,9 @@ import copy
 import logging
 import UNI_v3_funcs
 import math
-logging.basicConfig(filename='strategy.log',level=logging.DEBUG)
+import arch
+from scipy.stats import norm
+logging.basicConfig(filename='autoregressive_strategy.log',level=logging.DEBUG)
 
 ##################
 #
@@ -14,9 +16,10 @@ logging.basicConfig(filename='strategy.log',level=logging.DEBUG)
 #
 ##################
 
+
 class StrategyObservation:
     def __init__(self,timepoint,current_price,base_range_lower,base_range_upper,limit_range_lower,limit_range_upper,
-         reset_range_lower,reset_range_upper,ecdf,inverse_ecdf,alpha_param,tau_param,limit_parameter,
+         reset_range_lower,reset_range_upper,ar_model,alpha_param,tau_param,limit_parameter,volatility_reset_ratio,
                  liquidity_in_0,liquidity_in_1,fee_tier,decimals_0,decimals_1,token_0_left_over=0.0,token_1_left_over=0.0,
                  token_0_fees=0.0,token_1_fees=0.0,liquidity_ranges=None,swaps=None):
         
@@ -28,11 +31,11 @@ class StrategyObservation:
         self.limit_range_upper     = limit_range_upper 
         self.reset_range_lower     = reset_range_lower
         self.reset_range_upper     = reset_range_upper
-        self.ecdf                  = ecdf
-        self.inverse_ecdf          = inverse_ecdf
+        self.forecast_horizon      = 1 # potential strategy parameter
         self.alpha_param           = alpha_param
         self.tau_param             = tau_param
         self.limit_parameter       = limit_parameter
+        self.volatility_reset_ratio= volatility_reset_ratio
         self.liquidity_in_0        = liquidity_in_0
         self.liquidity_in_1        = liquidity_in_1
         self.fee_tier              = fee_tier
@@ -61,9 +64,8 @@ class StrategyObservation:
         # and they need to be generated
         ###########################################################################################
         if liquidity_ranges is None:
-            self.liquidity_ranges         = self.set_liquidity_ranges()
-        # If not, copy the liquidity ranges and update time and current token amounts
-        else: 
+            self.liquidity_ranges         = self.set_liquidity_ranges(ar_model)
+        else: # If not, copy the liquidity ranges and update time and current token amounts
             self.liquidity_ranges         = copy.deepcopy(liquidity_ranges)
             for i in range(len(self.liquidity_ranges)):
                 self.liquidity_ranges[i]['time'] = self.time
@@ -80,7 +82,7 @@ class StrategyObservation:
                 self.token_0_fees          = fees_token_0
                 self.token_1_fees          = fees_token_1
                 
-            self.check_strategy()
+            self.check_strategy(ar_model)
 
                 
     ########################################################
@@ -112,7 +114,7 @@ class StrategyObservation:
     ########################################################
     # Check if we need to rebalance
     ########################################################
-    def check_strategy(self):
+    def check_strategy(self,ar_model):
         
         LEFT_RANGE_LOW      = self.price < self.reset_range_lower
         LEFT_RANGE_HIGH     = self.price > self.reset_range_upper
@@ -121,24 +123,49 @@ class StrategyObservation:
         
         # Rebalance out of limit when have both tokens in self.limit_parameter ratio
         if self.liquidity_ranges[1]['token_0'] > 0.0 and self.liquidity_ranges[1]['token_1'] > 0.0:
-            LIMIT_SIMILAR = ((self.liquidity_ranges[1]['token_0']/self.liquidity_ranges[1]['token_1']) >= self.limit_parameter) | ((self.liquidity_ranges[1]['token_0']/self.liquidity_ranges[1]['token_1']) <= (self.limit_parameter+1))
+            LIMIT_SIMILAR = ((self.liquidity_ranges[1]['token_0']/self.liquidity_ranges[1]['token_1']) >= self.limit_parameter) | \
+                             ((self.liquidity_ranges[1]['token_0']/self.liquidity_ranges[1]['token_1']) <= (self.limit_parameter+1))
             if BASE_ORDER_BALANCE > 0.0:
                 LIMIT_REBALANCE = ((LIMIT_ORDER_BALANCE/BASE_ORDER_BALANCE) > (1+self.limit_parameter)) & LIMIT_SIMILAR
             else:
                 LIMIT_REBALANCE = LIMIT_SIMILAR
         else:
             LIMIT_REBALANCE = False
+            
+            
+        # Rebalance if volatility has gone down significantly
+        # When volatility increases the reset range will be hit
+        # Check every day (60 * 24 * 3 minutes)
+        
+        time_since_reset =  self.time - self.liquidity_ranges[0]['reset_time']
+        VOL_REBALANCE    = False
+        if divmod(time_since_reset.total_seconds(), 60)[0] % (60) == 0:
+            res                  = ar_model.fit(update_freq=0, disp="off")
+            forecasts            = res.forecast(horizon=self.forecast_horizon, reindex=False)
+            current_vol_forecast = (forecasts.variance.to_numpy()[0][self.forecast_horizon-1])**(1/2) # for de-scaling 
+            
+            logging.debug("-----------------------------------------")
+            logging.debug("CHECKING AR RESET")
+            logging.debug('Time: {} || Last Reset Time {} || Price {}'.format(self.time,self.liquidity_ranges[0]['reset_time'],1/self.price))
+            logging.debug('Current Vol: {} || Last Reset Time Vol {} || Ratio {}'.format(current_vol_forecast,
+                                                                                         self.liquidity_ranges[0]['volatility'],
+                                                                                         current_vol_forecast/self.liquidity_ranges[0]['volatility']))
+        
+            if current_vol_forecast/self.liquidity_ranges[0]['volatility'] <= self.volatility_reset_ratio:
+                VOL_REBALANCE = True
+            else:
+                VOL_REBALANCE = False
         
 
         # if a reset is necessary
-        if ((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | LIMIT_REBALANCE) :
+        if (((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | LIMIT_REBALANCE) | VOL_REBALANCE) :
             self.reset_point = True
             
             # Remove liquidity and claim fees 
             self.remove_liquidity()
             
             # Reset liquidity
-            self.liquidity_ranges = self.set_liquidity_ranges()
+            self.liquidity_ranges = self.set_liquidity_ranges(ar_model)
      
     ########################################################
     # Rebalance: Remove all liquidity positions
@@ -166,9 +193,9 @@ class StrategyObservation:
         
         logging.debug("-----------------------------------------")
         logging.debug("REMOVE LIQUIDITY")
-        logging.debug("remove 0: {}  || remove 1: {}".format(removed_amount_0,removed_amount_1))
-        logging.debug("left 0:   {}  || left   1: {}".format(self.token_0_left_over,self.token_1_left_over))
-        logging.debug("total 0:  {}  || total  1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
+        logging.debug("remove 0: {} || remove 1: {}".format(removed_amount_0,removed_amount_1))
+        logging.debug("left 0: {}   || left 1: {}".format(self.token_0_left_over,self.token_1_left_over))
+        logging.debug("total 0: {}  || total 1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
         logging.debug("Market Value: {:.2f}".format(self.liquidity_in_0+self.liquidity_in_1/self.price))
         
         self.token_0_left_over = 0.0
@@ -180,19 +207,29 @@ class StrategyObservation:
     ########################################################
     # Get expected price range ranges
     ########################################################
-    def set_liquidity_ranges(self):
+    def set_liquidity_ranges(self,ar_model):
         
         ###########################################################
         # STEP 1: Do calculations required to determine base liquidity bounds
         ###########################################################
-        self.reset_range_lower     = (1 + self.inverse_ecdf((1 -      self.tau_param)/2))    * self.price 
-        self.reset_range_upper     = (1 + self.inverse_ecdf( 1 - (1 - self.tau_param)/2))    * self.price 
+        
+        # Fit model
+        res              = ar_model.fit(update_freq=0, disp="off")
+        forecasts        = res.forecast(horizon=self.forecast_horizon, reindex=False)
+        var_forecast     = forecasts.variance.to_numpy()[0][self.forecast_horizon-1] # for de-scaling 
+        return_forecast  = forecasts.mean.to_numpy()[0][self.forecast_horizon-1]    # for de-scaling 
+        sd_forecast      = var_forecast**(0.5)
+        
+        target_price     = (1 + return_forecast) * self.price
+        
+        self.reset_range_lower     = (1 + norm.ppf((1 -      self.tau_param)/2,loc=return_forecast, scale=sd_forecast))    * self.price#target_price
+        self.reset_range_upper     = (1 + norm.ppf( 1 - (1 - self.tau_param)/2,loc=return_forecast, scale=sd_forecast))    * self.price#target_price
 
         # Set the base range
-        self.base_range_lower      = (1 + self.inverse_ecdf((1 -      self.alpha_param)/2))  * self.price
-        self.base_range_upper      = (1 + self.inverse_ecdf( 1 - (1 - self.alpha_param)/2))  * self.price        
+        self.base_range_lower      = (1 + norm.ppf((1 -      self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))  * self.price#target_price
+        self.base_range_upper      = (1 + norm.ppf( 1 - (1 - self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))  * self.price#target_price       
         
-        save_ranges          = []
+        save_ranges                = []
         
         ########################################################### 
         # STEP 2: Set Base Liquidity
@@ -207,6 +244,12 @@ class StrategyObservation:
         logging.debug("TIME: {}  PRICE {} /// Reset Range: [{}, {}]".format(self.time,1/self.price,1/self.reset_range_upper,1/self.reset_range_lower))
         logging.debug("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
         self.liquidity_in_0,self.liquidity_in_1,self.liquidity_in_0+self.liquidity_in_1/self.price))
+        logging.debug("Target Price: {}  Return Forecast {}  sd_forecast: {}".format(1/target_price,return_forecast,sd_forecast))
+        
+        logging.debug("Base range lower : {}  base range upper {}".format(self.base_range_lower,
+                                                                          self.base_range_upper))
+        
+        logging.debug("{}".format( (1 + norm.ppf((1 -      self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))))
                               
         # Lower Range
         TICK_A_PRE         = int(math.log(self.decimal_adjustment*self.base_range_lower,1.0001))
@@ -228,7 +271,10 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : base_0_amount,
                                 'token_1'            : base_1_amount,
-                                'position_liquidity' : liquidity_placed}     
+                                'position_liquidity' : liquidity_placed,
+                                'volatility'         : sd_forecast,
+                                'reset_time'         : self.time,
+                                'return_forecast'    : return_forecast}
 
         save_ranges.append(base_liq_range)
         logging.debug('******** BASE LIQUIDITY')
@@ -281,7 +327,10 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : limit_amount_0,
                                 'token_1'            : limit_amount_1,
-                                'position_liquidity' : liquidity_placed}     
+                                'position_liquidity' : liquidity_placed,
+                                'volatility'         : sd_forecast,
+                                'reset_time'         : self.time,
+                                'return_forecast'    : return_forecast}     
 
         save_ranges.append(limit_liq_range)
         
@@ -292,7 +341,6 @@ class StrategyObservation:
         
         total_token_0_amount  -= limit_amount_0
         total_token_1_amount  -= limit_amount_1
-        
         
         # Check we didn't allocate more liquidiqity than available
         
@@ -324,6 +372,9 @@ class StrategyObservation:
             this_data['price']                  = self.price
             this_data['price_1_0']              = 1/this_data['price']
             this_data['reset_point']            = self.reset_point
+            this_data['volatility']             = self.liquidity_ranges[0]['volatility']
+            this_data['return_forecast']        = self.liquidity_ranges[0]['return_forecast']
+            
             
             # Range Variables
             this_data['base_range_lower']       = self.base_range_lower
@@ -338,6 +389,7 @@ class StrategyObservation:
             this_data['reset_range_upper_usd']  = 1/this_data['reset_range_lower']
             this_data['limit_range_lower_usd']  = 1/this_data['limit_range_upper']
             this_data['limit_range_upper_usd']  = 1/this_data['limit_range_lower']
+            this_data['reset_range_upper']      = self.reset_range_upper
             
             # Fee Varaibles
             this_data['token_0_fees']           = self.token_0_fees 
@@ -376,16 +428,23 @@ class StrategyObservation:
 # the time point, and contains the pool price (token 1 per token 0)
 ########################################################
 
-def run_reset_strategy(historical_data,swap_data,alpha_parameter,tau_parameter,limit_parameter,ecdf,inverse_ecdf,
+def run_autoreg_strategy(historical_data,swap_data,model_data,alpha_parameter,tau_parameter,limit_parameter,volatility_reset_ratio,
                        liquidity_in_0,liquidity_in_1,fee_tier,decimals_0,decimals_1):
+    
+    # Prepare the model
+    model_data['price_return_scaled'] = model_data['price_return']    
+    simulation_begin                  = historical_data.index.min()
+    current_spot                      = np.argmin(abs(model_data['time_pd']-simulation_begin))
+    ar                                = arch.univariate.ARX(model_data['price_return_scaled'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
+    ar.volatility                     = arch.univariate.GARCH(p=1,q=1)
 
-    reset_strats = []
+    autoreg_strats = []
     
     # Go through every time period in the data that was passet
     for i in range(len(historical_data)): 
         # Strategy Initialization
         if i == 0:
-            reset_strats.append(StrategyObservation(historical_data.index[i],
+            autoreg_strats.append(StrategyObservation(historical_data.index[i],
                                               historical_data[i],
                                               0.0,
                                               0.0,
@@ -393,39 +452,42 @@ def run_reset_strategy(historical_data,swap_data,alpha_parameter,tau_parameter,l
                                               0.0,
                                               0.0,
                                               0.0,
-                                              ecdf,
-                                              inverse_ecdf,
-                                              alpha_parameter,tau_parameter,limit_parameter,
+                                              ar,
+                                              alpha_parameter,tau_parameter,limit_parameter,volatility_reset_ratio,
                                               liquidity_in_0,liquidity_in_1,
                                               fee_tier,decimals_0,decimals_1))
         # After initialization
         else:
+            
+            current_spot                      = np.argmin(abs(model_data['time_pd']-historical_data.index[i]))
+            ar                                = arch.univariate.ARX(model_data['price_return_scaled'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
+            ar.volatility                     = arch.univariate.GARCH(p=1,q=1)
+            
             relevant_swaps = swap_data[historical_data.index[i-1]:historical_data.index[i]]
-            reset_strats.append(StrategyObservation(historical_data.index[i],
+            autoreg_strats.append(StrategyObservation(historical_data.index[i],
                                               historical_data[i],
-                                              reset_strats[i-1].base_range_lower,
-                                              reset_strats[i-1].base_range_upper,
-                                              reset_strats[i-1].limit_range_lower,
-                                              reset_strats[i-1].limit_range_upper,
-                                              reset_strats[i-1].reset_range_lower,
-                                              reset_strats[i-1].reset_range_upper,
-                                              ecdf,
-                                              inverse_ecdf,
-                                              alpha_parameter,tau_parameter,limit_parameter,
-                                              reset_strats[i-1].liquidity_in_0,
-                                              reset_strats[i-1].liquidity_in_1,
-                                              reset_strats[i-1].fee_tier,
-                                              reset_strats[i-1].decimals_0,
-                                              reset_strats[i-1].decimals_1,
-                                              reset_strats[i-1].token_0_left_over,
-                                              reset_strats[i-1].token_1_left_over,
-                                              reset_strats[i-1].token_0_fees,
-                                              reset_strats[i-1].token_1_fees,
-                                              reset_strats[i-1].liquidity_ranges,
+                                              autoreg_strats[i-1].base_range_lower,
+                                              autoreg_strats[i-1].base_range_upper,
+                                              autoreg_strats[i-1].limit_range_lower,
+                                              autoreg_strats[i-1].limit_range_upper,
+                                              autoreg_strats[i-1].reset_range_lower,
+                                              autoreg_strats[i-1].reset_range_upper,
+                                              ar,
+                                              alpha_parameter,tau_parameter,limit_parameter,volatility_reset_ratio,
+                                              autoreg_strats[i-1].liquidity_in_0,
+                                              autoreg_strats[i-1].liquidity_in_1,
+                                              autoreg_strats[i-1].fee_tier,
+                                              autoreg_strats[i-1].decimals_0,
+                                              autoreg_strats[i-1].decimals_1,
+                                              autoreg_strats[i-1].token_0_left_over,
+                                              autoreg_strats[i-1].token_1_left_over,
+                                              autoreg_strats[i-1].token_0_fees,
+                                              autoreg_strats[i-1].token_1_fees,
+                                              autoreg_strats[i-1].liquidity_ranges,
                                               relevant_swaps
                                               ))
                 
-    return reset_strats
+    return autoreg_strats
 
 ########################################################
 # Calculates % returns over a minutes frequency
@@ -440,7 +502,7 @@ def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
     price_data_aggregated['price_return'] = (price_data_aggregated['price'].pct_change())
     price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
-    price_data_filtered                   = price_data_full[ (price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
+    price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
 
 
