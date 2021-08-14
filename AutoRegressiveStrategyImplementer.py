@@ -432,10 +432,9 @@ def run_autoreg_strategy(historical_data,swap_data,model_data,alpha_parameter,ta
                        liquidity_in_0,liquidity_in_1,fee_tier,decimals_0,decimals_1):
     
     # Prepare the model
-    model_data['price_return_scaled'] = model_data['price_return']    
     simulation_begin                  = historical_data.index.min()
     current_spot                      = np.argmin(abs(model_data['time_pd']-simulation_begin))
-    ar                                = arch.univariate.ARX(model_data['price_return_scaled'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
+    ar                                = arch.univariate.ARX(model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
     ar.volatility                     = arch.univariate.GARCH(p=1,q=1)
 
     autoreg_strats = []
@@ -460,7 +459,7 @@ def run_autoreg_strategy(historical_data,swap_data,model_data,alpha_parameter,ta
         else:
             
             current_spot                      = np.argmin(abs(model_data['time_pd']-historical_data.index[i]))
-            ar                                = arch.univariate.ARX(model_data['price_return_scaled'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
+            ar                                = arch.univariate.ARX(model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
             ar.volatility                     = arch.univariate.GARCH(p=1,q=1)
             
             relevant_swaps = swap_data[historical_data.index[i-1]:historical_data.index[i]]
