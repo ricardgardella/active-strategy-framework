@@ -258,20 +258,13 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     'quoteCurrency':  [x['quoteCurrency']['symbol'] for x in request_price['data']['ethereum']['dexTrades']],
     'quoteAmount':    [x['quoteAmount'] for x in request_price['data']['ethereum']['dexTrades']],
     'baseAmount':     [x['baseAmount'] for x in request_price['data']['ethereum']['dexTrades']],
-    'quotePrice':     [x['quotePrice'] for x in request_price['data']['ethereum']['dexTrades']],
-    'average_price':  [x['average_price'] for x in request_price['data']['ethereum']['dexTrades']],
-    'median_price':   [x['average_price'] for x in request_price['data']['ethereum']['dexTrades']],
-    'median_price':   [x['average_price'] for x in request_price['data']['ethereum']['dexTrades']],
-    'open_price':     [x['average_price'] for x in request_price['data']['ethereum']['dexTrades']],
-    'close_price':    [x['average_price'] for x in request_price['data']['ethereum']['dexTrades']]
+    'quotePrice':     [x['quotePrice'] for x in request_price['data']['ethereum']['dexTrades']]
     }) for request_price in relevant_requests])
     
     price_data['time'] = pd.to_datetime(price_data['time'], format = '%Y-%m-%d %H:%M:%S')
     price_data['time_pd'] = pd.to_datetime(price_data['time'],utc=True)
     price_data.set_index('time_pd',drop=False,inplace=True)
 
-    # Convert price to float
-    price_data['close_price']  = price_data["close_price"].astype(dtype=float)
     # Create minute variable for easier filtering and aggregating
     price_data['minute'] = [timeperiod.strftime('%M') for timeperiod in price_data['time']]
     price_data['minute'] = price_data['minute'].astype(dtype=int)
@@ -375,10 +368,6 @@ def generate_price_payload(token_0_address,token_1_address,date_begin,date_end):
                       quoteAmount
                       trades: count
                       quotePrice
-                      average_price: quotePrice(calculate: average)
-                      median_price:  quotePrice(calculate: median)
-                      open_price:    minimum(of: time, get: quote_price)
-                      close_price:   maximum(of: time, get: quote_price)
                     }
                   }
                 }'''
