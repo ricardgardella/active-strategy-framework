@@ -4,7 +4,7 @@ import copy
 import logging
 import UNI_v3_funcs
 import math
-logging.basicConfig(filename='strategy.log',level=logging.DEBUG)
+logging.basicConfig(filename='reset_strategy.log',level=logging.INFO)
 
 ##################
 #
@@ -76,9 +76,9 @@ class StrategyObservation:
 
                 self.liquidity_ranges[i]['token_0'] = amount_0
                 self.liquidity_ranges[i]['token_1'] = amount_1
-                fees_token_0,fees_token_1 = self.accrue_fees(swaps)
-                self.token_0_fees          = fees_token_0
-                self.token_1_fees          = fees_token_1
+                fees_token_0,fees_token_1           = self.accrue_fees(swaps)
+                self.token_0_fees                   = fees_token_0
+                self.token_1_fees                   = fees_token_1
                 
             self.check_strategy()
 
@@ -164,12 +164,12 @@ class StrategyObservation:
         self.liquidity_in_0 = removed_amount_0 + self.token_0_left_over + self.token_0_fees_accum
         self.liquidity_in_1 = removed_amount_1 + self.token_1_left_over + self.token_1_fees_accum
         
-        logging.debug("-----------------------------------------")
-        logging.debug("REMOVE LIQUIDITY")
-        logging.debug("remove 0: {}  || remove 1: {}".format(removed_amount_0,removed_amount_1))
-        logging.debug("left 0:   {}  || left   1: {}".format(self.token_0_left_over,self.token_1_left_over))
-        logging.debug("total 0:  {}  || total  1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
-        logging.debug("Market Value: {:.2f}".format(self.liquidity_in_0+self.liquidity_in_1/self.price))
+        logging.info("-----------------------------------------")
+        logging.info("REMOVE LIQUIDITY")
+        logging.info("remove 0: {}  || remove 1: {}".format(removed_amount_0,removed_amount_1))
+        logging.info("left 0:   {}  || left   1: {}".format(self.token_0_left_over,self.token_1_left_over))
+        logging.info("total 0:  {}  || total  1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
+        logging.info("Market Value: {:.2f}".format(self.liquidity_in_0+self.liquidity_in_1/self.price))
         
         self.token_0_left_over = 0.0
         self.token_1_left_over = 0.0
@@ -202,10 +202,12 @@ class StrategyObservation:
         total_token_0_amount = self.liquidity_in_0
         total_token_1_amount = self.liquidity_in_1
         
-        logging.debug("-----------------------------------------")
-        logging.debug("SETTING RANGE")
-        logging.debug("TIME: {}  PRICE {} /// Reset Range: [{}, {}]".format(self.time,1/self.price,1/self.reset_range_upper,1/self.reset_range_lower))
-        logging.debug("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
+        logging.info("-----------------------------------------")
+        logging.info("SETTING RANGE")
+        logging.info("TIME: {} PRICE {:.3f}".format(self.time,1/self.price))
+        logging.info("Reset Range:     [{:.3f}, {:.3f}]".format(1/self.reset_range_upper,1/self.reset_range_lower))
+        logging.info("Liquidity Range: [{:.3f}, {:.3f}]".format(1/self.base_range_upper,1/self.base_range_lower))
+        logging.info("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
         self.liquidity_in_0,self.liquidity_in_1,self.liquidity_in_0+self.liquidity_in_1/self.price))
                               
         # Lower Range
@@ -216,8 +218,8 @@ class StrategyObservation:
         TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.base_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
         
-        liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,self.liquidity_in_0,self.liquidity_in_1,self.decimals_0,self.decimals_1))
-        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)
+        liquidity_placed_base         = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,self.liquidity_in_0,self.liquidity_in_1,self.decimals_0,self.decimals_1))
+        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_base,self.decimals_0,self.decimals_1)
         
         total_token_0_amount  -= base_0_amount
         total_token_1_amount  -= base_1_amount
@@ -228,13 +230,13 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : base_0_amount,
                                 'token_1'            : base_1_amount,
-                                'position_liquidity' : liquidity_placed}     
+                                'position_liquidity' : liquidity_placed_base}     
 
         save_ranges.append(base_liq_range)
-        logging.debug('******** BASE LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_0_amount,self.liquidity_in_0,total_token_0_amount))
-        logging.debug("Token 1: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_1_amount,self.liquidity_in_1,total_token_1_amount))
-        logging.debug("Liquidity: {}".format(liquidity_placed))
+        logging.info('******** BASE LIQUIDITY')
+        logging.info("Token 0: Liquidity Placed: {:.2f} / Available {:.2f} / Left Over: {:.2f}".format(base_0_amount,self.liquidity_in_0,total_token_0_amount))
+        logging.info("Token 1: Liquidity Placed: {:.2f} / Available {:.2f} / Left Over: {:.2f}".format(base_1_amount,self.liquidity_in_1,total_token_1_amount))
+        logging.info("Liquidity: {}".format(liquidity_placed_base))
 
         ###########################
         # Set Limit Position according to probability distribution
@@ -257,8 +259,8 @@ class StrategyObservation:
             TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.limit_range_upper,1.0001))
             TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
         
-            liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
-            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)            
+            liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
+            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_limit,self.decimals_0,self.decimals_1)            
         else:
             # Place Token 1
             limit_amount_0 = 0.0
@@ -272,8 +274,8 @@ class StrategyObservation:
             TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.limit_range_upper,1.0001))
             TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
             
-            liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
-            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)        
+            liquidity_placed_limit              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
+            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_limit,self.decimals_0,self.decimals_1)        
 
         limit_liq_range =       {'price'             : self.price,
                                 'lower_bin_tick'     : TICK_A,
@@ -281,14 +283,14 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : limit_amount_0,
                                 'token_1'            : limit_amount_1,
-                                'position_liquidity' : liquidity_placed}     
+                                'position_liquidity' : liquidity_placed_limit}     
 
         save_ranges.append(limit_liq_range)
         
-        logging.debug('******** LIMIT LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
-        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_0_amount))
-        logging.debug("Liquidity: {}".format(liquidity_placed))
+        logging.info('******** LIMIT LIQUIDITY')
+        logging.info("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
+        logging.info("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_1_amount))
+        logging.info("Liquidity: {} || Relative to Base: {:.2%}".format(liquidity_placed_limit,liquidity_placed_limit/liquidity_placed_base))
         
         total_token_0_amount  -= limit_amount_0
         total_token_1_amount  -= limit_amount_1
@@ -303,9 +305,9 @@ class StrategyObservation:
         self.token_0_left_over = max([total_token_0_amount,0.0])
         self.token_1_left_over = max([total_token_1_amount,0.0])
         
-        logging.debug('******** Summary')
-        logging.debug("Token 0: {} liq in // {} unallocated".format(self.liquidity_in_0,self.token_0_left_over))
-        logging.debug("Token 1: {} liq in // {} unallocated".format(self.liquidity_in_1,self.token_0_left_over))
+        logging.info('******** Summary')
+        logging.info("Token 0: {} liq in // {} unallocated".format(self.liquidity_in_0,self.token_0_left_over))
+        logging.info("Token 1: {} liq in // {} unallocated".format(self.liquidity_in_1,self.token_0_left_over))
         
         # Since liquidity was allocated, set to 0
         self.liquidity_in_0 = 0.0
