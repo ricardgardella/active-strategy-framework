@@ -78,9 +78,9 @@ class StrategyObservation:
 
                 self.liquidity_ranges[i]['token_0'] = amount_0
                 self.liquidity_ranges[i]['token_1'] = amount_1
-                fees_token_0,fees_token_1 = self.accrue_fees(swaps)
-                self.token_0_fees          = fees_token_0
-                self.token_1_fees          = fees_token_1
+                fees_token_0,fees_token_1           = self.accrue_fees(swaps)
+                self.token_0_fees                   = fees_token_0
+                self.token_1_fees                   = fees_token_1
                 
             self.check_strategy(ar_model)
 
@@ -135,21 +135,15 @@ class StrategyObservation:
             
         # Rebalance if volatility has gone down significantly
         # When volatility increases the reset range will be hit
-        # Check every day (60 * 24 * 3 minutes)
+        # Check every hour (60  minutes)
         
+        ar_check_frequency = 60        
         time_since_reset =  self.time - self.liquidity_ranges[0]['reset_time']
         VOL_REBALANCE    = False
-        if divmod(time_since_reset.total_seconds(), 60)[0] % (60) == 0:
+        if divmod(time_since_reset.total_seconds(), 60)[0] % ar_check_frequency == 0:
             res                  = ar_model.fit(update_freq=0, disp="off")
             forecasts            = res.forecast(horizon=self.forecast_horizon, reindex=False)
             current_vol_forecast = (forecasts.variance.to_numpy()[0][self.forecast_horizon-1])**(1/2) # for de-scaling 
-            
-            logging.debug("-----------------------------------------")
-            logging.debug("CHECKING AR RESET")
-            logging.debug('Time: {} || Last Reset Time {} || Price {}'.format(self.time,self.liquidity_ranges[0]['reset_time'],1/self.price))
-            logging.debug('Current Vol: {} || Last Reset Time Vol {} || Ratio {}'.format(current_vol_forecast,
-                                                                                         self.liquidity_ranges[0]['volatility'],
-                                                                                         current_vol_forecast/self.liquidity_ranges[0]['volatility']))
         
             if current_vol_forecast/self.liquidity_ranges[0]['volatility'] <= self.volatility_reset_ratio:
                 VOL_REBALANCE = True
@@ -221,13 +215,13 @@ class StrategyObservation:
         sd_forecast      = var_forecast**(0.5)
         
         target_price     = (1 + return_forecast) * self.price
-        
-        self.reset_range_lower     = (1 + norm.ppf((1 -      self.tau_param)/2,loc=return_forecast, scale=sd_forecast))    * self.price#target_price
-        self.reset_range_upper     = (1 + norm.ppf( 1 - (1 - self.tau_param)/2,loc=return_forecast, scale=sd_forecast))    * self.price#target_price
+
+        self.reset_range_lower     = target_price * (1 + return_forecast - self.tau_param*sd_forecast)
+        self.reset_range_upper     = target_price * (1 + return_forecast + self.tau_param*sd_forecast)
 
         # Set the base range
-        self.base_range_lower      = (1 + norm.ppf((1 -      self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))  * self.price#target_price
-        self.base_range_upper      = (1 + norm.ppf( 1 - (1 - self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))  * self.price#target_price       
+        self.base_range_lower      = target_price * (1 + return_forecast - self.alpha_param*sd_forecast)
+        self.base_range_upper      = target_price * (1 + return_forecast + self.alpha_param*sd_forecast)
         
         save_ranges                = []
         
@@ -245,11 +239,6 @@ class StrategyObservation:
         logging.debug("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
         self.liquidity_in_0,self.liquidity_in_1,self.liquidity_in_0+self.liquidity_in_1/self.price))
         logging.debug("Target Price: {}  Return Forecast {}  sd_forecast: {}".format(1/target_price,return_forecast,sd_forecast))
-        
-        logging.debug("Base range lower : {}  base range upper {}".format(self.base_range_lower,
-                                                                          self.base_range_upper))
-        
-        logging.debug("{}".format( (1 + norm.ppf((1 -      self.alpha_param)/2,loc=return_forecast, scale=sd_forecast))))
                               
         # Lower Range
         TICK_A_PRE         = int(math.log(self.decimal_adjustment*self.base_range_lower,1.0001))
@@ -336,7 +325,7 @@ class StrategyObservation:
         
         logging.debug('******** LIMIT LIQUIDITY')
         logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
-        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_0_amount))
+        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_1_amount))
         logging.debug("Liquidity: {}".format(liquidity_placed))
         
         total_token_0_amount  -= limit_amount_0

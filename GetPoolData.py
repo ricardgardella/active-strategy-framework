@@ -230,18 +230,22 @@ def get_pool_data_flipside(contract_address,api_token,DOWNLOAD_DATA = False):
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
-def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,DOWNLOAD_DATA = False):
+def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,DOWNLOAD_DATA = False,RATE_LIMIT=True):
 
     request = []
     
-    # Break out into months to rate limit
-    months_to_request = pd.date_range(date_begin,date_end,freq="M").strftime("%Y-%m-%d").tolist()
-
-    if DOWNLOAD_DATA:
-        for i in range(len(months_to_request)-1):             
-            request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1]),api_token))
-        with open('eth_usdc_1min.pkl', 'wb') as output:
-            pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
+    if DOWNLOAD_DATA:        
+        if RATE_LIMIT:
+            # Break out into months to rate limit
+            months_to_request = pd.date_range(date_begin,date_end,freq="M").strftime("%Y-%m-%d").tolist()
+                
+            for i in range(len(months_to_request)-1):             
+                request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1]),api_token))
+            with open('eth_usdc_1min.pkl', 'wb') as output:
+                pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
+        else:
+            # Otherwise just download the data
+            request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end),api_token))
     else:
         with open('eth_usdc_1min.pkl', 'rb') as input:
             request = pickle.load(input)
@@ -366,7 +370,6 @@ def generate_price_payload(token_0_address,token_1_address,date_begin,date_end):
                         address
                       }
                       quoteAmount
-                      trades: count
                       quotePrice
                     }
                   }
