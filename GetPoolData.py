@@ -120,7 +120,7 @@ def process_swap_data(request_swap_in):
         'amount1':    [x['arguments'][3]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
         'sqrtPrice':  [x['arguments'][4]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
         'liquidity':  [x['arguments'][5]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'tick':       [x['arguments'][6]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
+        'tick_swap':  [x['arguments'][6]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
         'txHash':     [x['transaction']['hash'] for x in request_swap['data']['ethereum']['smartContractEvents']],
         'txFrom':     [x['transaction']['txFrom']['address'] for x in request_swap['data']['ethereum']['smartContractEvents']],
         'name'  :    'Swap'
@@ -178,7 +178,7 @@ def get_liquidity_flipside(DOWNLOAD_DATA = False):
     stats_data['block']             = stats_data['BLOCK_ID']
     stats_data['virtual_liquidity'] = stats_data['VIRTUAL_LIQUIDITY_ADJUSTED']*DECIMAL_ADJUSTMENT
     stats_data['price_usd']         = stats_data['PRICE_0_1']
-    stats_data['price_tick']        = stats_data['TICK']
+    stats_data['tick_pool']         = stats_data['TICK']
     stats_data.sort_values('block',ascending=True,inplace=True)
    
     return stats_data
@@ -189,18 +189,21 @@ def get_liquidity_flipside(DOWNLOAD_DATA = False):
 ##############################################################
 def get_pool_data_flipside(contract_address,api_token,DOWNLOAD_DATA = False):
 
+    # Download  events
     request_mint,request_burn,request_swap = get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA)
-    swap_data         = process_swap_data(request_swap)
-    stats_data        = get_liquidity_flipside(DOWNLOAD_DATA)
+    # Clean up swap data
+    swap_data                              = process_swap_data(request_swap)
+    # Download pool liquidity data
+    stats_data                             = get_liquidity_flipside(DOWNLOAD_DATA)
     
-    full_data = pd.merge_asof(swap_data,stats_data[['block','virtual_liquidity','price_usd','price_tick']],on='block',direction='backward',allow_exact_matches = False)
+    full_data = pd.merge_asof(swap_data,stats_data[['block','virtual_liquidity','price_usd','tick_pool']],on='block',direction='backward',allow_exact_matches = False)
 
     # Remove swap with wrong arguments
     wrong_inputs               = full_data[full_data['amount0'].str.contains('x')].index
     full_data                  = full_data.drop(wrong_inputs)
     wrong_inputs               = full_data[full_data['amount1'].str.contains('x')].index
     full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['tick'].str.contains('x')].index
+    wrong_inputs               = full_data[full_data['tick_swap'].str.contains('x')].index
     full_data                  = full_data.drop(wrong_inputs)
     wrong_inputs               = full_data[full_data['sqrtPrice'].str.contains('x')].index
     full_data                  = full_data.drop(wrong_inputs)
@@ -211,15 +214,12 @@ def get_pool_data_flipside(contract_address,api_token,DOWNLOAD_DATA = False):
 
     full_data['amount0']         = full_data['amount0'].astype(float)
     full_data['amount1']         = full_data['amount1'].astype(float)
-    full_data['tick']            = full_data['tick'].astype(float)
+    full_data['tick_swap']       = full_data['tick_swap'].astype(float)
     full_data['sqrtPrice']       = full_data['sqrtPrice'].astype(float)
     full_data['liquidity']       = full_data['liquidity'].astype(float)
     full_data['token_in']        = full_data.apply(lambda x: 'token0' if (x['amount0'] < 0) else 'token1',axis=1)
     full_data['traded_in']       = full_data.apply(lambda x: -x['amount0']/(10**DECIMALS_0) if (x['amount0'] < 0) else -x['amount1']/(10**DECIMALS_1),axis=1).astype(float)
     full_data['traded_out']      = full_data.apply(lambda x:  x['amount0']/(10**DECIMALS_0) if (x['amount0'] > 0) else  x['amount1']/(10**DECIMALS_1),axis=1).astype(float)
-    full_data['pool_price']      = 1/(full_data['sqrtPrice']**2 * 10**(DECIMALS_0 - DECIMALS_1) / (2**192))
-    full_data['prior_sqrtPrice'] = full_data['sqrtPrice'].shift(1)
-    full_data['prior_tick']      = full_data['tick'].shift(1)
     
     # Set index in pandas UTC Time
     full_data['time_pd'] = pd.to_datetime(full_data['time'],utc=True)
