@@ -6,7 +6,7 @@ import UNI_v3_funcs
 import math
 import arch
 from scipy.stats import norm
-logging.basicConfig(filename='autoregressive_strategy.log',level=logging.DEBUG)
+logging.basicConfig(filename='autoregressive_strategy.log',level=logging.INFO)
 
 ##################
 #
@@ -185,12 +185,12 @@ class StrategyObservation:
         self.liquidity_in_0 = removed_amount_0 + self.token_0_left_over + self.token_0_fees_accum
         self.liquidity_in_1 = removed_amount_1 + self.token_1_left_over + self.token_1_fees_accum
         
-        logging.debug("-----------------------------------------")
-        logging.debug("REMOVE LIQUIDITY")
-        logging.debug("remove 0: {} || remove 1: {}".format(removed_amount_0,removed_amount_1))
-        logging.debug("left 0: {}   || left 1: {}".format(self.token_0_left_over,self.token_1_left_over))
-        logging.debug("total 0: {}  || total 1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
-        logging.debug("Market Value: {:.2f}".format(self.liquidity_in_0+self.liquidity_in_1/self.price))
+        logging.info("-----------------------------------------")
+        logging.info("REMOVE LIQUIDITY")
+        logging.info("remove 0: {} || remove 1: {}".format(removed_amount_0,removed_amount_1))
+        logging.info("left 0: {}   || left 1: {}".format(self.token_0_left_over,self.token_1_left_over))
+        logging.info("total 0: {}  || total 1: {}".format(self.liquidity_in_0,self.liquidity_in_1))
+        logging.info("Market Value: {:.2f}".format(self.liquidity_in_0+self.liquidity_in_1/self.price))
         
         self.token_0_left_over = 0.0
         self.token_1_left_over = 0.0
@@ -233,12 +233,12 @@ class StrategyObservation:
         total_token_0_amount = self.liquidity_in_0
         total_token_1_amount = self.liquidity_in_1
         
-        logging.debug("-----------------------------------------")
-        logging.debug("SETTING RANGE")
-        logging.debug("TIME: {}  PRICE {} /// Reset Range: [{}, {}]".format(self.time,1/self.price,1/self.reset_range_upper,1/self.reset_range_lower))
-        logging.debug("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
+        logging.info("-----------------------------------------")
+        logging.info("SETTING RANGE")
+        logging.info("TIME: {}  PRICE {} /// Reset Range: [{}, {}]".format(self.time,1/self.price,1/self.reset_range_upper,1/self.reset_range_lower))
+        logging.info("Total: Token0: {:.2f} Token1: {:.2f} // Total Value {:.2f}".format(
         self.liquidity_in_0,self.liquidity_in_1,self.liquidity_in_0+self.liquidity_in_1/self.price))
-        logging.debug("Target Price: {}  Return Forecast {}  sd_forecast: {}".format(1/target_price,return_forecast,sd_forecast))
+        logging.info("Target Price: {}  Return Forecast {}  sd_forecast: {}".format(1/target_price,return_forecast,sd_forecast))
                               
         # Lower Range
         TICK_A_PRE         = int(math.log(self.decimal_adjustment*self.base_range_lower,1.0001))
@@ -248,8 +248,8 @@ class StrategyObservation:
         TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.base_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
         
-        liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,self.liquidity_in_0,self.liquidity_in_1,self.decimals_0,self.decimals_1))
-        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)
+        liquidity_placed_base         = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,self.liquidity_in_0,self.liquidity_in_1,self.decimals_0,self.decimals_1))
+        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_base,self.decimals_0,self.decimals_1)
         
         total_token_0_amount  -= base_0_amount
         total_token_1_amount  -= base_1_amount
@@ -260,16 +260,16 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : base_0_amount,
                                 'token_1'            : base_1_amount,
-                                'position_liquidity' : liquidity_placed,
+                                'position_liquidity' : liquidity_placed_base,
                                 'volatility'         : sd_forecast,
                                 'reset_time'         : self.time,
                                 'return_forecast'    : return_forecast}
 
         save_ranges.append(base_liq_range)
-        logging.debug('******** BASE LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_0_amount,self.liquidity_in_0,total_token_0_amount))
-        logging.debug("Token 1: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_1_amount,self.liquidity_in_1,total_token_1_amount))
-        logging.debug("Liquidity: {}".format(liquidity_placed))
+        logging.info('******** BASE LIQUIDITY')
+        logging.info("Token 0: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_0_amount,self.liquidity_in_0,total_token_0_amount))
+        logging.info("Token 1: Liquidity Placed: {:.5f} / Available {:.2f} / Left Over: {:.2f}".format(base_1_amount,self.liquidity_in_1,total_token_1_amount))
+        logging.info("Liquidity: {}".format(liquidity_placed_base))
 
         ###########################
         # Set Limit Position according to probability distribution
@@ -292,8 +292,8 @@ class StrategyObservation:
             TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.limit_range_upper,1.0001))
             TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
         
-            liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
-            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)            
+            liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
+            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_limit,self.decimals_0,self.decimals_1)            
         else:
             # Place Token 1
             limit_amount_0 = 0.0
@@ -307,8 +307,8 @@ class StrategyObservation:
             TICK_B_PRE        = int(math.log(self.decimal_adjustment*self.limit_range_upper,1.0001))
             TICK_B            = int(round(TICK_B_PRE/self.tickSpacing)*self.tickSpacing)
             
-            liquidity_placed              = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
-            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed,self.decimals_0,self.decimals_1)        
+            liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(self.price_tick,TICK_A,TICK_B,limit_amount_0,limit_amount_1,self.decimals_0,self.decimals_1))
+            limit_amount_0,limit_amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,TICK_A,TICK_B,liquidity_placed_limit,self.decimals_0,self.decimals_1)        
 
         limit_liq_range =       {'price'             : self.price,
                                 'lower_bin_tick'     : TICK_A,
@@ -316,17 +316,17 @@ class StrategyObservation:
                                 'time'               : self.time,
                                 'token_0'            : limit_amount_0,
                                 'token_1'            : limit_amount_1,
-                                'position_liquidity' : liquidity_placed,
+                                'position_liquidity' : liquidity_placed_limit,
                                 'volatility'         : sd_forecast,
                                 'reset_time'         : self.time,
                                 'return_forecast'    : return_forecast}     
 
         save_ranges.append(limit_liq_range)
         
-        logging.debug('******** LIMIT LIQUIDITY')
-        logging.debug("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
-        logging.debug("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_1_amount))
-        logging.debug("Liquidity: {}".format(liquidity_placed))
+        logging.info('******** LIMIT LIQUIDITY')
+        logging.info("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
+        logging.info("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_1_amount))
+        logging.info("Liquidity: {}".format(liquidity_placed_limit))
         
         total_token_0_amount  -= limit_amount_0
         total_token_1_amount  -= limit_amount_1
@@ -340,9 +340,9 @@ class StrategyObservation:
         self.token_0_left_over = max([total_token_0_amount,0.0])
         self.token_1_left_over = max([total_token_1_amount,0.0])
         
-        logging.debug('******** Summary')
-        logging.debug("Token 0: {} liq in // {} unallocated".format(self.liquidity_in_0,self.token_0_left_over))
-        logging.debug("Token 1: {} liq in // {} unallocated".format(self.liquidity_in_1,self.token_0_left_over))
+        logging.info('******** Summary')
+        logging.info("Token 0: {} liq in // {} unallocated".format(self.liquidity_in_0,self.token_0_left_over))
+        logging.info("Token 1: {} liq in // {} unallocated".format(self.liquidity_in_1,self.token_0_left_over))
         
         # Since liquidity was allocated, set to 0
         self.liquidity_in_0 = 0.0
@@ -372,12 +372,6 @@ class StrategyObservation:
             this_data['limit_range_upper']      = self.limit_range_upper
             this_data['reset_range_lower']      = self.reset_range_lower
             this_data['reset_range_upper']      = self.reset_range_upper
-            this_data['base_range_lower_usd']   = 1/this_data['base_range_upper']
-            this_data['base_range_upper_usd']   = 1/this_data['base_range_lower']
-            this_data['reset_range_lower_usd']  = 1/this_data['reset_range_upper']
-            this_data['reset_range_upper_usd']  = 1/this_data['reset_range_lower']
-            this_data['limit_range_lower_usd']  = 1/this_data['limit_range_upper']
-            this_data['limit_range_upper_usd']  = 1/this_data['limit_range_lower']
             this_data['reset_range_upper']      = self.reset_range_upper
             
             # Fee Varaibles
@@ -422,7 +416,7 @@ def run_autoreg_strategy(historical_data,swap_data,model_data,alpha_parameter,ta
     
     # Prepare the model
     simulation_begin                  = historical_data.index.min()
-    current_spot                      = np.argmin(abs(model_data['time_pd']-simulation_begin))
+    current_spot                      = np.argmin(abs(model_data.index-simulation_begin))
     ar                                = arch.univariate.ARX(model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
     ar.volatility                     = arch.univariate.GARCH(p=1,q=1)
 
@@ -482,38 +476,67 @@ def run_autoreg_strategy(historical_data,swap_data,model_data,alpha_parameter,ta
 ########################################################
 
 def aggregate_time(data,minutes = 10):
-    price_set = set(pd.date_range(data.min(),data.max(),freq=str(minutes)+'min'))
-    return data.isin(price_set)
+    price_range               = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
+    price_range               = price_range.set_index('time_pd',drop=False)
+    new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left')
+    new_data['baseCurrency']  = new_data['baseCurrency'].ffill()
+    new_data['quoteCurrency'] = new_data['quoteCurrency'].ffill()
+    new_data['baseAmount']    = new_data['baseAmount'].ffill()
+    new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
+    new_data['quotePrice']    = new_data['quotePrice'].ffill()
+    price_set                 = set(pd.date_range(new_data.index.min(),new_data.index.max(),freq=str(minutes)+'min'))
+    return new_data[new_data.index.isin(price_set)]
 
 def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
-    price_data_aggregated                 = data[aggregate_time(data['time'],minutes)].copy()
-    price_data_aggregated['price_return'] = (price_data_aggregated['price'].pct_change())
+    price_data_aggregated                 = aggregate_time(data,minutes).copy()
+    price_data_aggregated['price_return'] = (price_data_aggregated['quotePrice'].pct_change())
     price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
     price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
 
+def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
 
-def analyze_strategy(data_in,initial_position_value):
-    days_strategy           = (data_in['time'].max()-data_in['time'].min()).days
-    data_in['cum_fees_usd'] = data_in['token_0_fees'].cumsum() + (data_in['token_1_fees'] * data_in['price_1_0']).cumsum()
+    # For pools where token0 is a USD stable coin, no need to supply token_0_usd
+    # Otherwise must pass the USD price data for token 0
     
-    strategy_last_obs       = data_in.tail(1)
+    if token_0_usd_data is None:
+        data_usd = data_in
+        data_usd['cum_fees_usd']       = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['value_position_usd'] = data_usd['value_position']
+    else:
+        # Merge in usd price data
+        token_0_usd_data['price_0_usd'] = 1/token_0_usd_data['quotePrice']
+        token_0_usd_data                = token_0_usd_data.sort_index()
+        data_in['time_pd']              = pd.to_datetime(data_in['time'],utc=True)
+        data_in                         = data_in.set_index('time_pd')
+        data_usd                        = pd.merge_asof(data_in,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
+        
+        # Compute accumulated fees and other usd metrics
+        data_usd['cum_fees_0']          = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['cum_fees_usd']        = data_usd['cum_fees_0']*data_usd['price_0_usd']
+        data_usd['value_position_usd']  = data_usd['value_position']*data_usd['price_0_usd']
+
+
+    days_strategy           = (data_usd['time'].max()-data_usd['time'].min()).days    
+    strategy_last_obs       = data_usd.tail(1)
     strategy_last_obs       = strategy_last_obs.reset_index(drop=True)
-    net_apr                 = float((strategy_last_obs['value_position']/initial_position_value - 1) * 365 / days_strategy)
-    
+    net_apr                 = float((strategy_last_obs['value_position_usd']/initial_position_value - 1) * 365 / days_strategy)
+
     summary_strat = {
                         'days_strategy'        : days_strategy,
                         'gross_fee_apr'        : float((strategy_last_obs['cum_fees_usd']/initial_position_value) * 365 / days_strategy),
                         'gross_fee_return'     : float(strategy_last_obs['cum_fees_usd']/initial_position_value),
                         'net_apr'              : net_apr,
-                        'net_return'           : float(strategy_last_obs['value_position']/initial_position_value  - 1),
-                        'rebalances'           : data_in['reset_point'].sum(),
-                        'max_drawdown'         : ( data_in['value_position'].max() - data_in['value_position'].min() ) / data_in['value_position'].max(),
-                        'volatility'           : ((data_in['value_position'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)), # Minute frequency data
-                        'sharpe_ratio'         : float(net_apr / (((data_in['value_position'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)))),
-                        'mean_base_position'   : (data_in['base_position_value']/(data_in['base_position_value']+data_in['limit_position_value']+data_in['value_left_over'])).mean(),
-                        'median_base_position' : (data_in['base_position_value']/(data_in['base_position_value']+data_in['limit_position_value']+data_in['value_left_over'])).median()
+                        'net_return'           : float(strategy_last_obs['value_position_usd']/initial_position_value  - 1),
+                        'rebalances'           : data_usd['reset_point'].sum(),
+                        'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
+                        'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)), # Minute frequency data
+                        'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)))),
+                        'mean_base_position'   : (data_usd['base_position_value']/ \
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
+                        'median_base_position' : (data_usd['base_position_value']/ \
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median()
                     }
     
     return summary_strat

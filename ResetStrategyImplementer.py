@@ -290,7 +290,7 @@ class StrategyObservation:
         logging.info('******** LIMIT LIQUIDITY')
         logging.info("Token 0: Liquidity Placed: {}  / Available {:.2f}".format(limit_amount_0,total_token_0_amount))
         logging.info("Token 1: Liquidity Placed: {} / Available {:.2f}".format(limit_amount_1,total_token_1_amount))
-        logging.info("Liquidity: {} || Relative to Base: {:.2%}".format(liquidity_placed_limit,liquidity_placed_limit/liquidity_placed_base))
+        logging.info("Liquidity: {}".format(liquidity_placed_limit))
         
         total_token_0_amount  -= limit_amount_0
         total_token_1_amount  -= limit_amount_1
@@ -334,12 +334,6 @@ class StrategyObservation:
             this_data['limit_range_upper']      = self.limit_range_upper
             this_data['reset_range_lower']      = self.reset_range_lower
             this_data['reset_range_upper']      = self.reset_range_upper
-            this_data['base_range_lower_usd']   = 1/this_data['base_range_upper']
-            this_data['base_range_upper_usd']   = 1/this_data['base_range_lower']
-            this_data['reset_range_lower_usd']  = 1/this_data['reset_range_upper']
-            this_data['reset_range_upper_usd']  = 1/this_data['reset_range_lower']
-            this_data['limit_range_lower_usd']  = 1/this_data['limit_range_upper']
-            this_data['limit_range_upper_usd']  = 1/this_data['limit_range_lower']
             
             # Fee Varaibles
             this_data['token_0_fees']           = self.token_0_fees 
@@ -434,38 +428,68 @@ def run_reset_strategy(historical_data,swap_data,alpha_parameter,tau_parameter,l
 ########################################################
 
 def aggregate_time(data,minutes = 10):
-    price_set = set(pd.date_range(data.min(),data.max(),freq=str(minutes)+'min'))
-    return data.isin(price_set)
+    price_range               = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
+    price_range               = price_range.set_index('time_pd',drop=False)
+    new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left')
+    new_data['baseCurrency']  = new_data['baseCurrency'].ffill()
+    new_data['quoteCurrency'] = new_data['quoteCurrency'].ffill()
+    new_data['baseAmount']    = new_data['baseAmount'].ffill()
+    new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
+    new_data['quotePrice']    = new_data['quotePrice'].ffill()
+    price_set                 = set(pd.date_range(new_data.index.min(),new_data.index.max(),freq=str(minutes)+'min'))
+    return new_data[new_data.index.isin(price_set)]
 
 def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
-    price_data_aggregated                 = data[aggregate_time(data['time'],minutes)].copy()
-    price_data_aggregated['price_return'] = (price_data_aggregated['price'].pct_change())
+    price_data_aggregated                 = aggregate_time(data,minutes).copy()
+    price_data_aggregated['price_return'] = (price_data_aggregated['quotePrice'].pct_change())
     price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
-    price_data_filtered                   = price_data_full[ (price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
+    price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
 
 
-def analyze_strategy(data_in,initial_position_value):
-    days_strategy           = (data_in['time'].max()-data_in['time'].min()).days
-    data_in['cum_fees_usd'] = data_in['token_0_fees'].cumsum() + (data_in['token_1_fees'] * data_in['price_1_0']).cumsum()
+def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
+
+    # For pools where token0 is a USD stable coin, no need to supply token_0_usd
+    # Otherwise must pass the USD price data for token 0
     
-    strategy_last_obs       = data_in.tail(1)
+    if token_0_usd_data is None:
+        data_usd = data_in
+        data_usd['cum_fees_usd']       = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['value_position_usd'] = data_usd['value_position']
+    else:
+        # Merge in usd price data
+        token_0_usd_data['price_0_usd'] = 1/token_0_usd_data['quotePrice']
+        token_0_usd_data                = token_0_usd_data.sort_index()
+        data_in['time_pd']              = pd.to_datetime(data_in['time'],utc=True)
+        data_in                         = data_in.set_index('time_pd')
+        data_usd                        = pd.merge_asof(data_in,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
+        
+        # Compute accumulated fees and other usd metrics
+        data_usd['cum_fees_0']          = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['cum_fees_usd']        = data_usd['cum_fees_0']*data_usd['price_0_usd']
+        data_usd['value_position_usd']  = data_usd['value_position']*data_usd['price_0_usd']
+
+
+    days_strategy           = (data_usd['time'].max()-data_usd['time'].min()).days    
+    strategy_last_obs       = data_usd.tail(1)
     strategy_last_obs       = strategy_last_obs.reset_index(drop=True)
-    net_apr                 = float((strategy_last_obs['value_position']/initial_position_value - 1) * 365 / days_strategy)
-    
+    net_apr                 = float((strategy_last_obs['value_position_usd']/initial_position_value - 1) * 365 / days_strategy)
+
     summary_strat = {
                         'days_strategy'        : days_strategy,
                         'gross_fee_apr'        : float((strategy_last_obs['cum_fees_usd']/initial_position_value) * 365 / days_strategy),
                         'gross_fee_return'     : float(strategy_last_obs['cum_fees_usd']/initial_position_value),
                         'net_apr'              : net_apr,
-                        'net_return'           : float(strategy_last_obs['value_position']/initial_position_value  - 1),
-                        'rebalances'           : data_in['reset_point'].sum(),
-                        'max_drawdown'         : ( data_in['value_position'].max() - data_in['value_position'].min() ) / data_in['value_position'].max(),
-                        'volatility'           : ((data_in['value_position'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)), # Minute frequency data
-                        'sharpe_ratio'         : float(net_apr / (((data_in['value_position'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)))),
-                        'mean_base_position'   : (data_in['base_position_value']/(data_in['base_position_value']+data_in['limit_position_value']+data_in['value_left_over'])).mean(),
-                        'median_base_position' : (data_in['base_position_value']/(data_in['base_position_value']+data_in['limit_position_value']+data_in['value_left_over'])).median()
+                        'net_return'           : float(strategy_last_obs['value_position_usd']/initial_position_value  - 1),
+                        'rebalances'           : data_usd['reset_point'].sum(),
+                        'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
+                        'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)), # Minute frequency data
+                        'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)))),
+                        'mean_base_position'   : (data_usd['base_position_value']/ \
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
+                        'median_base_position' : (data_usd['base_position_value']/ \
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median()
                     }
     
     return summary_strat
