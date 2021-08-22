@@ -9,177 +9,61 @@ from itertools import compress
 # From a given pool
 # Returns json requests
 
-def get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA=False):        
-        
-    # Break out into block height chunks to rate limit
-    block_height_limits = [0,12800000,14000000]
+def query_univ3_graph(query: str, variables=None) -> dict:
+    univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
+    """Make graphql query to subgraph"""
+    if variables:
+        params = {'query': query, 'variables': variables}
+    else:
+        params = {'query': query}
+    response = requests.post(univ3_graph_url, json=params)
+    return response.json()
 
-    request_mint = []
-    request_burn = []
-    request_swap = []
+def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False):        
+        
+    request_swap = [] 
     
     if DOWNLOAD_DATA:
-            for i in range(len(block_height_limits)-1): 
-                event = "Mint"
-                request_mint.append(run_query(generate_event_payload(event,contract_address,block_height_limits[i],block_height_limits[i+1]),api_token))
-                event = "Burn"
-                request_burn.append(run_query(generate_event_payload(event,contract_address,block_height_limits[i],block_height_limits[i+1]),api_token))
-                event = "Swap"
-                request_swap.append(run_query(generate_event_payload(event,contract_address,block_height_limits[i],block_height_limits[i+1]),api_token))
+
+        current_payload = generate_fist_event_payload('swaps',contract_address)
+        current_id      = query_univ3_graph(current_payload)['data']['pool']['swaps'][0]['id']
+        finished        = False
+
+        while not finished:
+            current_payload = generate_event_payload('swaps',contract_address,str(1000))
+            response        = query_univ3_graph(current_payload,{'paginateId':current_id})['data']['pool']['swaps']
+
+            if len(response) == 0:
+                finished = True
+            else:
+                current_id = response[-1]['id']
+                request_swap.extend(response)
                 
-            with open('eth_usdc_mint.pkl', 'wb') as output:
-                pickle.dump(request_mint, output, pickle.HIGHEST_PROTOCOL)
-                
-            with open('eth_usdc_burn.pkl', 'wb') as output:
-                pickle.dump(request_burn, output, pickle.HIGHEST_PROTOCOL)
-                
-            with open('eth_usdc_swap.pkl', 'wb') as output:
+            with open(file_name+'_swap.pkl', 'wb') as output:
                 pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
     else:
-        with open('eth_usdc_mint.pkl', 'rb') as input:
-            request_mint = pickle.load(input)
-        with open('eth_usdc_burn.pkl', 'rb') as input:
-            request_burn = pickle.load(input)
-        with open('eth_usdc_swap.pkl', 'rb') as input:
+        with open(file_name+'_swap.pkl', 'rb') as input:
             request_swap = pickle.load(input)
            
-    return request_mint,request_burn,request_swap
-
-##############################################################
-# Convert mint_burn data json to pandas DataFrame
-##############################################################
-def process_mint_burn_data(request_mint_in,request_burn_in):
-       
-    mint_data = pd.concat([pd.DataFrame({
-        'block':      [int(x['block']['height']) for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'time':       [x['block']['timestamp']['iso8601'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'tickLower':  [x['arguments'][2]['value'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'tickUpper':  [x['arguments'][3]['value'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'amount':     [x['arguments'][4]['value'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'amount0':    [x['arguments'][5]['value'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'amount1':    [x['arguments'][6]['value'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'txHash':     [x['transaction']['hash']   for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'txFrom':     [x['transaction']['txFrom']['address'] for x in request_mint['data']['ethereum']['smartContractEvents']],
-        'name'  :    'Mint'
-        }) for request_mint in request_mint_in])
-
-    
-    burn_data = pd.concat([pd.DataFrame({
-        'block':      [int(x['block']['height']) for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'time':       [x['block']['timestamp']['iso8601'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'tickLower':  [x['arguments'][1]['value'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'tickUpper':  [x['arguments'][2]['value'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'amount':     [x['arguments'][3]['value'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'amount0':    [x['arguments'][4]['value'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'amount1':    [x['arguments'][5]['value'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'txHash':     [x['transaction']['hash'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'txFrom':     [x['transaction']['txFrom']['address'] for x in request_burn['data']['ethereum']['smartContractEvents']],
-        'name'  :    'Burn'
-        }) for request_burn in request_burn_in])
-
-    ############################################################## 
-    # Drop events with errors in the arguments
-    # For example some transaction hashes show up in parameters
-    ##############################################################
-    
-    # Mint
-    wrong_inputs   = mint_data[mint_data['amount'].str.contains('x',na=False)].index
-    mint_data      = mint_data.drop(wrong_inputs)
-    
-    wrong_inputs   = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
-    mint_data      = mint_data.drop(wrong_inputs)
-    
-    wrong_inputs   = mint_data[mint_data['tickLower'].str.contains('x',na=False)].index
-    mint_data      = mint_data.drop(wrong_inputs)
-
-    # Burn
-    wrong_inputs   = burn_data[burn_data['amount'].str.contains('x',na=False)].index
-    burn_data      = burn_data.drop(wrong_inputs)
-    
-    wrong_inputs   = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
-    burn_data      = burn_data.drop(wrong_inputs)
-    
-    wrong_inputs   = burn_data[burn_data['tickLower'].str.contains('x',na=False)].index
-    burn_data      = burn_data.drop(wrong_inputs)
-
-    # Merge Mint burn data
-    mb_data = pd.concat([mint_data,burn_data])
-    
-    return mb_data
-
-##############################################################
-# Convert JSON Request with Swap Events to Pandas
-##############################################################
-
-def process_swap_data(request_swap_in):
-     
-    swap_data =     pd.concat([pd.DataFrame({
-        'block':      [x['block']['height'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'time':       [x['block']['timestamp']['iso8601'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'amount0':    [x['arguments'][2]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'amount1':    [x['arguments'][3]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'sqrtPrice':  [x['arguments'][4]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'liquidity':  [x['arguments'][5]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'tick_swap':  [x['arguments'][6]['value'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'txHash':     [x['transaction']['hash'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'txFrom':     [x['transaction']['txFrom']['address'] for x in request_swap['data']['ethereum']['smartContractEvents']],
-        'name'  :    'Swap'
-        }) for request_swap in request_swap_in])
-
-    # Sort by block
-    swap_data = swap_data.sort_values('block',ascending=True)
-    
-    return swap_data
-
-
-##############################################################
-# Get Pool Data using Mint and Burn Events from Bitquery
-##############################################################
-def get_pool_data_mint_burn(contract_address,api_token,DOWNLOAD_DATA = False):
-
-    request_mint,request_burn,request_swap = get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA)
-    
-    mb_data           = process_mint_burn_data(request_mint,request_burn)
-    swap_data         = process_swap_data(request_swap)
-    
-    # Remove swap with wrong inputs
-    wrong_inputs               = swap_data[swap_data['amount0'].str.contains('x')].index
-    swap_data                  = swap_data.drop(wrong_inputs)
-    wrong_inputs               = swap_data[swap_data['amount1'].str.contains('x')].index
-    swap_data                  = swap_data.drop(wrong_inputs)
-    wrong_inputs               = swap_data[swap_data['tick'].str.contains('x')].index
-    swap_data                  = swap_data.drop(wrong_inputs)
-    
-    return swap_data,mb_data
+    return pd.DataFrame(request_swap)
 
 ##############################################################
 # Get Pool Virtual Liquidity Data using Flipside Data Pool Stats Table
 ##############################################################
-def get_liquidity_flipside(DOWNLOAD_DATA = False):
+def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
     
-    DECIMALS_0         = 6
-    DECIMALS_1         = 18
-    DECIMAL_ADJUSTMENT = 10**(DECIMALS_1  - DECIMALS_0)
-    
-    flipside_queries   = ['https://api.flipsidecrypto.com/api/v2/queries/b8ad3087-803a-478b-9ed3-c4f3c096bc47/data/latest',
-                          'https://api.flipsidecrypto.com/api/v2/queries/de277680-5ff6-4d58-bfff-29ef114215be/data/latest']
-    
-    if DOWNLOAD_DATA:
-        
-        for i in flipside_queries:
-            request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_queries]
-        with open('eth_usdc_liquidity.pkl', 'wb') as output:
+
+    if DOWNLOAD_DATA:        
+        for i in flipside_query:
+            request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_query]
+        with open(file_name+'_liquidity.pkl', 'wb') as output:
             pickle.dump(request_stats, output, pickle.HIGHEST_PROTOCOL)
     else:
-        with open('eth_usdc_liquidity.pkl', 'rb') as input:
+        with open(file_name+'_liquidity.pkl', 'rb') as input:
             request_stats = pickle.load(input)            
             
     stats_data                      = pd.concat(request_stats)
-    stats_data['block']             = stats_data['BLOCK_ID']
-    stats_data['virtual_liquidity'] = stats_data['VIRTUAL_LIQUIDITY_ADJUSTED']*DECIMAL_ADJUSTMENT
-    stats_data['price_usd']         = stats_data['PRICE_0_1']
-    stats_data['tick_pool']         = stats_data['TICK']
-    stats_data.sort_values('block',ascending=True,inplace=True)
+    
    
     return stats_data
     
@@ -187,50 +71,36 @@ def get_liquidity_flipside(DOWNLOAD_DATA = False):
 # Get all swaps for the pool using flipside data's price feed
 # For the contract's liquidity
 ##############################################################
-def get_pool_data_flipside(contract_address,api_token,DOWNLOAD_DATA = False):
+def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DATA = False):
 
     # Download  events
-    request_mint,request_burn,request_swap = get_pool_data_raw(contract_address,api_token,DOWNLOAD_DATA)
-    # Clean up swap data
-    swap_data                              = process_swap_data(request_swap)
+    swap_data               = get_swap_data(contract_address,file_name,DOWNLOAD_DATA)
+    swap_data['time_pd']    = pd.to_datetime(swap_data['timestamp'], unit='s', origin='unix',utc=True)
+    swap_data               = swap_data.set_index('time_pd')
+    swap_data['tick_swap']  = swap_data['tick']
+    swap_data               = swap_data.sort_index()
+    
     # Download pool liquidity data
-    stats_data                             = get_liquidity_flipside(DOWNLOAD_DATA)
+    stats_data              = get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA)    
+    stats_data['time_pd']   = pd.to_datetime(stats_data['BLOCK_TIMESTAMP'], origin='unix',utc=True) 
+    stats_data              = stats_data.set_index('time_pd')
+    stats_data              = stats_data.sort_index()
+    stats_data['tick_pool'] = stats_data['TICK']
     
-    full_data = pd.merge_asof(swap_data,stats_data[['block','virtual_liquidity','price_usd','tick_pool']],on='block',direction='backward',allow_exact_matches = False)
-
-    # Remove swap with wrong arguments
-    wrong_inputs               = full_data[full_data['amount0'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['amount1'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['tick_swap'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    wrong_inputs               = full_data[full_data['sqrtPrice'].str.contains('x')].index
-    full_data                  = full_data.drop(wrong_inputs)
-    
-    DECIMALS_0 = 6
-    DECIMALS_1 = 18
-    FEE_TIER   = 0.0003
-
+    full_data               = pd.merge_asof(swap_data,stats_data[['VIRTUAL_LIQUIDITY_ADJUSTED','tick_pool']],on='time_pd',direction='backward',allow_exact_matches = False)
+    full_data               = full_data.set_index('time_pd')
+    # token with negative amounts is the token being swapped in
+    full_data['tick_swap']       = full_data['tick_swap'].astype(int)
     full_data['amount0']         = full_data['amount0'].astype(float)
     full_data['amount1']         = full_data['amount1'].astype(float)
-    full_data['tick_swap']       = full_data['tick_swap'].astype(float)
-    full_data['sqrtPrice']       = full_data['sqrtPrice'].astype(float)
-    full_data['liquidity']       = full_data['liquidity'].astype(float)
     full_data['token_in']        = full_data.apply(lambda x: 'token0' if (x['amount0'] < 0) else 'token1',axis=1)
-    full_data['traded_in']       = full_data.apply(lambda x: -x['amount0']/(10**DECIMALS_0) if (x['amount0'] < 0) else -x['amount1']/(10**DECIMALS_1),axis=1).astype(float)
-    full_data['traded_out']      = full_data.apply(lambda x:  x['amount0']/(10**DECIMALS_0) if (x['amount0'] > 0) else  x['amount1']/(10**DECIMALS_1),axis=1).astype(float)
-    
-    # Set index in pandas UTC Time
-    full_data['time_pd'] = pd.to_datetime(full_data['time'],utc=True)
-    full_data = full_data.set_index('time_pd',drop=False)
     
     return full_data
 
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
-def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,DOWNLOAD_DATA = False,RATE_LIMIT=True):
+def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True):
 
     request = []
     
@@ -241,13 +111,13 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
                 
             for i in range(len(months_to_request)-1):             
                 request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1]),api_token))
-            with open('eth_usdc_1min.pkl', 'wb') as output:
+            with open(file_name+'_1min.pkl', 'wb') as output:
                 pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
         else:
             # Otherwise just download the data
             request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end),api_token))
     else:
-        with open('eth_usdc_1min.pkl', 'rb') as input:
+        with open(file_name+'_1min.pkl', 'rb') as input:
             request = pickle.load(input)
 
     # Prepare data for strategy:
@@ -265,13 +135,9 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     'quotePrice':     [x['quotePrice'] for x in request_price['data']['ethereum']['dexTrades']]
     }) for request_price in relevant_requests])
     
-    price_data['time'] = pd.to_datetime(price_data['time'], format = '%Y-%m-%d %H:%M:%S')
+    price_data['time']    = pd.to_datetime(price_data['time'], format = '%Y-%m-%d %H:%M:%S')
     price_data['time_pd'] = pd.to_datetime(price_data['time'],utc=True)
-    price_data.set_index('time_pd',drop=False,inplace=True)
-
-    # Create minute variable for easier filtering and aggregating
-    price_data['minute'] = [timeperiod.strftime('%M') for timeperiod in price_data['time']]
-    price_data['minute'] = price_data['minute'].astype(dtype=int)
+    price_data            = price_data.set_index('time_pd')
 
     return price_data
 
@@ -280,67 +146,41 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
 ##############################################################
 
 
-def generate_event_payload(event,address,block_begin,block_end):
-        payload =   '''{
-                      ethereum {
-                        smartContractEvents(
-                          options: {desc: "block.height"}
-                          smartContractEvent: {is: "'''+event+'''"}
-                          smartContractAddress: {is: "'''+address+'''"}
-                          height: {between: ['''+str(block_begin)+''','''+str(block_end)+''' ]}
-                        ) {
-                          smartContractEvent {
-                            name
-                          }
-                          block {
-                            height
-                            timestamp {
-                              iso8601
-                              unixtime
-                            }
-                          }
-                          arguments {
-                            value
-                            argument
-                          }
-                          transaction {
-                            hash
-                            txFrom {
-                              address
-                            }
-                          }
-                        }
-                      }
-                    }'''
+def generate_event_payload(event,address,n_query):
+        payload =   '''
+            query($paginateId: String!){
+              pool(id:"'''+address+'''"){
+                '''+event+'''(
+                  first: '''+n_query+'''
+                  orderBy: id
+                  orderDirection: asc
+                  where: {
+                    id_gt: $paginateId
+                  }
+                ) {
+                  id
+                  timestamp
+                  tick
+                  amount0
+                  amount1
+                }
+              }
+            }'''
         return payload
-
-def generate_all_event_payload(address):
-        payload =   '''{
-                      ethereum {
-                        smartContractEvents(
-                          options: {desc: "block.height"}
-                          smartContractAddress: {is: "'''+address+'''"}
+    
+def generate_fist_event_payload(event,address):
+        payload = '''query{
+                      pool(id:"'''+address+'''"){
+                      '''+event+'''(
+                      first: 1
+                      orderBy: id
+                      orderDirection: asc
                         ) {
-                          smartContractEvent {
-                            name
-                          }
-                          block {
-                            height
-                            timestamp {
-                              iso8601
-                              unixtime
-                            }
-                          }
-                          arguments {
-                            value
-                            argument
-                          }
-                          transaction {
-                            hash
-                            txFrom {
-                              address
-                            }
-                          }
+                          id
+                          timestamp
+                          tick
+                          amount0
+                          amount1
                         }
                       }
                     }'''
