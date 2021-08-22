@@ -39,10 +39,10 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False):
                 current_id = response[-1]['id']
                 request_swap.extend(response)
                 
-            with open(file_name+'_swap.pkl', 'wb') as output:
+            with open('./data/'+file_name+'_swap.pkl', 'wb') as output:
                 pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
     else:
-        with open(file_name+'_swap.pkl', 'rb') as input:
+        with open('./data/'+file_name+'_swap.pkl', 'rb') as input:
             request_swap = pickle.load(input)
            
     return pd.DataFrame(request_swap)
@@ -56,10 +56,10 @@ def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
     if DOWNLOAD_DATA:        
         for i in flipside_query:
             request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_query]
-        with open(file_name+'_liquidity.pkl', 'wb') as output:
+        with open('./data/'+file_name+'_liquidity.pkl', 'wb') as output:
             pickle.dump(request_stats, output, pickle.HIGHEST_PROTOCOL)
     else:
-        with open(file_name+'_liquidity.pkl', 'rb') as input:
+        with open('./data/'+file_name+'_liquidity.pkl', 'rb') as input:
             request_stats = pickle.load(input)            
             
     stats_data                      = pd.concat(request_stats)
@@ -111,13 +111,13 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
                 
             for i in range(len(months_to_request)-1):             
                 request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1]),api_token))
-            with open(file_name+'_1min.pkl', 'wb') as output:
+            with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
                 pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
         else:
             # Otherwise just download the data
             request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end),api_token))
     else:
-        with open(file_name+'_1min.pkl', 'rb') as input:
+        with open('./data/'+file_name+'_1min.pkl', 'rb') as input:
             request = pickle.load(input)
 
     # Prepare data for strategy:
