@@ -8,7 +8,7 @@ This repository contains several python scripts that are used by [Gamma Strategi
 
 1. [ResetStrategyImplementer.py](ResetStrategyImplementer.py) which performs the simulations and extracts the statistics necessary for analysis of the ResetStrategy. This file can be modified to implement any LP strategy, and it will be simulated with this code.
 2. [AutoRegressiveStrategyImplementer.py](AutoRegressiveStrategyImplementer.py) does the same but for an AR(1)-GARCH(1,1) model.
-3. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from Bitquery and Flipside Crypto.
+3. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from TheGraph, Bitquery and Flipside Crypto.
 4. [UNI_v3_funcs.py](UNI_v3_funcs.py) which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
 
 In order to provide an illustration of potential usage, we have included two Jupyter Notebooks that show how to use the framework:
@@ -35,7 +35,8 @@ You will then modify the following functions:
 
 The simulator is currently set up to analyze the [USDC/WETH 0.3% pool](https://etherscan.io/address/0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8). We use two data sources that you will need to adjust to update data / analyze a different pool:
 
-1. **[Bitquery](https://graphql.bitquery.io/ide):** We obtain the history of swaps in the pool, a Uniswap price feed.[^1] To update the data or query another pool you will need to sign up, obtain an API key and save it in afile in a file called ```config.py``` in this directory, as a string: ```BITQUERY_API_TOKEN = XXXXXXXX```.
+1. **[TheGraph](https://thegraph.com/legacy-explorer/subgraph/uniswap/uniswap-v3):** We obtain the full history of Uniswap v3 swaps from whatever pool we need, in order to accurately simulate the performance of the simulated strategy.
+2. **[Bitquery](https://graphql.bitquery.io/ide):** We obtain historical Uniswap prices, quoted in whatever denomination we need. To update the data or query another pool you will need to sign up, obtain an API key and save it in afile in a file called ```config.py``` in this directory, as a string: ```BITQUERY_API_TOKEN = XXXXXXXX```.
 2. **[Flipside Crypto](https://app.flipsidecrypto.com/velocity):** We obtain the virtual liquidity of the pool at every block, which is used to approximate the fee income earned in the pool, as described in their [documentation](https://docs.flipsidecrypto.com/our-data/tables/uniswap-v3-tables/pool-stats).
 
 To update the data get an API key and set ```DOWNLOAD_DATA = True``` in the notebook.
@@ -49,5 +50,3 @@ The current implementation is very flexible and allows to analyze a different po
 
 There are several potential sources for imprecision, as for example gas fees are not taken into account, and can have a significant impact on performance in particular for small positions in high fee regimes. There could be rounding issues from the Python implementation of the Solidity code, and differences from the pool price due to Bitquery's price feed not being identical to that of the pool (as expected).
 
-#### Footnotes:
-1 The code also extracts mint/burn events but these are note currently being used. Could be a potential improvement of accurracy over the virtual liquidity at the block frequency.

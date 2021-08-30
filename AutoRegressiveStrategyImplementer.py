@@ -5,7 +5,7 @@ import logging
 import UNI_v3_funcs
 import math
 import arch
-from scipy.stats import norm
+import plotly.graph_objects as go
 logging.basicConfig(filename='autoregressive_strategy.log',level=logging.INFO)
 
 ##################
@@ -45,7 +45,8 @@ class StrategyObservation:
         self.token_1_left_over     = token_1_left_over
         self.token_0_fees_accum    = token_0_fees
         self.token_1_fees_accum    = token_1_fees
-        self.reset_point           = False     
+        self.reset_point           = False
+        self.reset_reason          = ''
         self.decimal_adjustment    = math.pow(10, self.decimals_1  - self.decimals_0)
         self.tickSpacing           = int(self.fee_tier*2*10000)
         
@@ -152,8 +153,15 @@ class StrategyObservation:
         
 
         # if a reset is necessary
-        if (((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | LIMIT_REBALANCE) | VOL_REBALANCE) :
+        if (((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | LIMIT_REBALANCE) | VOL_REBALANCE):
             self.reset_point = True
+            
+            if (LEFT_RANGE_LOW | LEFT_RANGE_HIGH):
+                self.reset_reason = 'exited_range'
+            elif LIMIT_REBALANCE:
+                self.reset_reason = 'limit_imbalance'
+            elif VOL_REBALANCE:
+                self.reset_reason = 'vol_rebalance'
             
             # Remove liquidity and claim fees 
             self.remove_liquidity()
@@ -361,6 +369,7 @@ class StrategyObservation:
             this_data['price']                  = self.price
             this_data['price_1_0']              = 1/this_data['price']
             this_data['reset_point']            = self.reset_point
+            this_data['reset_reason']           = self.reset_reason
             this_data['volatility']             = self.liquidity_ranges[0]['volatility']
             this_data['return_forecast']        = self.liquidity_ranges[0]['return_forecast']
             
@@ -540,3 +549,71 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
                     }
     
     return summary_strat
+
+
+def plot_strategy(strategy_result,y_axis_label,base_color = '#ff0000'):
+    
+    data_strategy                        = pd.DataFrame([i.dict_components() for i in strategy_result])
+    data_strategy                        = data_strategy.set_index('time',drop=False)
+    
+    CHART_SIZE = 300
+
+    fig_strategy = go.Figure()
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['base_range_lower'],
+        fill=None,
+        mode='lines',
+        showlegend = False,
+        line_color=base_color,
+        ))
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['base_range_upper'],
+        name='Base Position',
+        fill='tonexty', # fill area between trace0 and trace1
+        mode='lines', line_color=base_color))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['limit_range_lower'],
+        fill=None,
+        mode='lines',
+        showlegend = False,
+        line_color='#6f6f6f'))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['limit_range_upper'],
+        name='Base + Limit Position',
+        fill='tonexty', # fill area between trace0 and trace1
+        mode='lines', line_color='#6f6f6f',))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['reset_range_lower'],
+        name='Strategy Reset Bound',
+        line=dict(width=2,dash='dot',color='black')))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['reset_range_upper'],
+        showlegend = False,
+        line=dict(width=2,dash='dot',color='black',)))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['price_1_0'],
+        name='Price',
+        line=dict(width=2,color='black')))
+
+    fig_strategy.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Autoregressive Strategy Simulation',
+        xaxis_title="Date",
+        yaxis_title=y_axis_label,
+    )
+
+    fig_strategy.show(renderer="png")
+    
