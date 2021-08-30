@@ -163,6 +163,7 @@ def generate_event_payload(event,address,n_query):
                   tick
                   amount0
                   amount1
+                  amountUSD
                 }
               }
             }'''

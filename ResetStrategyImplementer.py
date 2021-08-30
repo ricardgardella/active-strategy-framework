@@ -4,6 +4,7 @@ import copy
 import logging
 import UNI_v3_funcs
 import math
+import plotly.graph_objects as go
 logging.basicConfig(filename='reset_strategy.log',level=logging.INFO)
 
 ##################
@@ -493,3 +494,70 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
                     }
     
     return summary_strat
+
+
+def plot_strategy(strategy_result,y_axis_label,base_color = '#ff0000'):
+    
+    data_strategy                        = pd.DataFrame([i.dict_components() for i in strategy_result])
+    data_strategy                        = data_strategy.set_index('time',drop=False)
+    
+    CHART_SIZE = 300
+
+    fig_strategy = go.Figure()
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['base_range_lower'],
+        fill=None,
+        mode='lines',
+        showlegend = False,
+        line_color=base_color,
+        ))
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['base_range_upper'],
+        name='Base Position',
+        fill='tonexty', # fill area between trace0 and trace1
+        mode='lines', line_color=base_color))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['limit_range_lower'],
+        fill=None,
+        mode='lines',
+        showlegend = False,
+        line_color='#6f6f6f'))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['limit_range_upper'],
+        name='Base + Limit Position',
+        fill='tonexty', # fill area between trace0 and trace1
+        mode='lines', line_color='#6f6f6f',))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['reset_range_lower'],
+        name='Strategy Reset Bound',
+        line=dict(width=2,dash='dot',color='black')))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=1/data_strategy['reset_range_upper'],
+        showlegend = False,
+        line=dict(width=2,dash='dot',color='black',)))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['price_1_0'],
+        name='Price',
+        line=dict(width=2,color='black')))
+
+    fig_strategy.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Autoregressive Strategy Simulation',
+        xaxis_title="Date",
+        yaxis_title=y_axis_label,
+    )
+
+    fig_strategy.show(renderer="png")
