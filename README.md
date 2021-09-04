@@ -6,30 +6,29 @@
 
 This repository contains several python scripts that are used by [Gamma Strategies](https://medium.com/gamma-strategies) to simulate the performance of Uniswap v3 liquidity provision strategies' performance and evaluate risks. The main scripts of the package are:
 
-1. [ResetStrategyImplementer.py](ResetStrategyImplementer.py) which performs the simulations and extracts the statistics necessary for analysis of the ResetStrategy. This file can be modified to implement any LP strategy, and it will be simulated with this code.
-2. [AutoRegressiveStrategyImplementer.py](AutoRegressiveStrategyImplementer.py) does the same but for an AR(1)-GARCH(1,1) model.
+1. [ActiveStrategyFramework.py](ActiveStrategyFramework.py) base code of the framework which executues a ```Strategy```, conducting either back-testing simulations (```simulate_strategy``` function and passing in historical swap data), or conducting a live implementation of the strategy.
+2. [ResetStrategy.py](ResetStrategy.py) first implementation of a strategy which uses the empirical distribution of returns in order to predict future prices and set ranges for the LP positions.
+2. [AutoRegressiveStrategy.py](AutoRegressiveStrategy.py) second implementation of the strategy, using an AR(1)-GARCH(1,1) model.
 3. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from TheGraph, Bitquery and Flipside Crypto.
 4. [UNI_v3_funcs.py](UNI_v3_funcs.py) which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
 
 In order to provide an illustration of potential usage, we have included two Jupyter Notebooks that show how to use the framework:
-- [Strategy_simlation_example.ipynb](Strategy_simlation_example.ipynb) runs an simple 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
-- [AutoRegressiveStrategy.ipynb](AutoRegressiveStrategy.ipynb) does the same but with the Autoregressive strategy
+- [1_Reset_Strategy_Example.ipynb](1_Reset_Strategy_Example.ipynb) runs an simple 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
+- [2_AutoRegressive_Strategy_Example.ipynb](2_AutoRegressive_Strategy_Example.ipynb) does the same but with the Autoregressive strategy
 
 We have constructed a flexible framework for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy of fee income. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5th 2021 is when swap data starts to show up consistently). 
 
-
 ## Simulating your own strategy
 
-In order to simulate your own strategy you should clone this repository to your local computer, and implement your algorithm in the [ResetStrategyImplementer.py](ResetStrategyImplementer.py) script. This script implements a ```ResetStrategyObservation``` object that for each time period stores the state of the strategy, accumulated fees and all relevant variables, as well as performing the rebalancing logic.
-
-The template is currently adapted to the strategies used by [Visor Finance's Hypervisor](https://github.com/VisorFinance/hypervisor), which set a base liquidity provision position, and a limit one with the tokens that are left over as may occur due to concentrated liquidity math and single sided deposits, but this could be generalized as well.
-
-You will then modify the following functions:
+In order to simulate your own strategy you should clone this repository to your computer, and implement your algorithm in a new ```Strategy``` script, which is a class for which you must define the following functions (see the [ResetStrategy.py](ResetStrategy.py) script for an example):
 
 1. ```set_liquidity_ranges``` computes where the LP ranges are set in an LP strategy and stores the virtual liquidity placed for each position. 
 2. ```check_strategy``` to implement your algorithm's rebalancing logic.
+3. ```dict_components``` to extract the relevant data from each strategy observations in order to evaluate performance and prepare charts.
 
- You can debug by looking at the ```strategy.log``` output file which prints details at each rebalance.
+Once you have your ```Strategy``` defined, you can use the [ActiveStrategyFramework.py](ActiveStrategyFramework.py) structure to conduct backtesting simulations or run the code live. See either of the Jupyter notebooks for how to conduct the implementation.
+
+The template is currently adapted to the strategies used by [Visor Finance's Hypervisor](https://github.com/VisorFinance/hypervisor), which set a base liquidity provision position, and a limit one with the tokens that are left over as may occur due to concentrated liquidity math and single sided deposits, but this could be generalized as well.
 
 ## Data & simulating a different pool
 
