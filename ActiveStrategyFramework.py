@@ -195,7 +195,16 @@ def aggregate_time(data,minutes = 10):
     price_set                 = set(pd.date_range(new_data.index.min(),new_data.index.max(),freq=str(minutes)+'min'))
     return new_data[new_data.index.isin(price_set)]
 
-def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
+def aggregate_price_data(data,frequency,PRICE_CHANGE_LIMIT = .9):
+    
+    if   frequency == 'M':
+            minutes = 1
+    elif frequency == 'H':
+            minutes = 60
+    elif frequency == 'D':
+            minutes = 60*24
+    
+    
     price_data_aggregated                 = aggregate_time(data,minutes).copy()
     price_data_aggregated['price_return'] = (price_data_aggregated['quotePrice'].pct_change())
     price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
@@ -203,8 +212,16 @@ def aggregate_price_data(data,minutes,PRICE_CHANGE_LIMIT = .9):
     price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
 
-def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
+def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,frequency = 'M'):
 
+    
+    if   frequency == 'M':
+            annualization_factor = 365*24*60
+    elif frequency == 'H':
+            annualization_factor = 365*24
+    elif frequency == 'D':
+            annualization_factor = 365
+            
     # For pools where token0 is a USD stable coin, no need to supply token_0_usd
     # Otherwise must pass the USD price data for token 0
     
@@ -239,10 +256,12 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None):
                         'net_return'           : float(strategy_last_obs['value_position_usd']/initial_position_value  - 1),
                         'rebalances'           : data_usd['reset_point'].sum(),
                         'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
-                        'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)), # Minute frequency data
-                        'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((365*24*60)**(0.5)))),
+                        'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)),
+                        'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),
+        
                         'mean_base_position'   : (data_usd['base_position_value']/ \
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
+        
                         'median_base_position' : (data_usd['base_position_value']/ \
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median()
                     }
