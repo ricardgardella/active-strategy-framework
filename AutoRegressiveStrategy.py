@@ -5,14 +5,24 @@ import arch
 import UNI_v3_funcs
 
 class AutoRegressiveStrategy:
-    def __init__(self,model_data,alpha_param,tau_param,limit_parameter,volatility_reset_ratio):
+    def __init__(self,model_data,alpha_param,tau_param,limit_parameter,volatility_reset_ratio,data_frequency='D'):
         
         self.model_data             = model_data
         self.alpha_param            = alpha_param
         self.tau_param              = tau_param
         self.limit_parameter        = limit_parameter
         self.volatility_reset_ratio = volatility_reset_ratio
+        self.data_frequency         = data_frequency
         
+        # Allow for different input data frequencies, always get 1 day ahead forecast
+        # Model data frequency is expressed in minutes
+        
+        if   data_frequency == 'D':
+            self.annualization_factor = 365**.5
+        elif data_frequency == 'H':
+            self.annualization_factor = (24*365)**.5
+        elif data_frequency == 'M':
+            self.annualization_factor = (60*24*365)**.5
         
     #####################################
     # Estimate AR model at current timepoint
@@ -20,17 +30,22 @@ class AutoRegressiveStrategy:
         
     def generate_model_forecast(self,timepoint):
             current_spot         = np.argmin(abs(self.model_data['time_pd']-timepoint))
-            ar_model             = arch.univariate.ARX(self.model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=False)
+            ar_model             = arch.univariate.ARX(self.model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
-            res              = ar_model.fit(update_freq=0, disp="off")
-            forecasts        = res.forecast(horizon=1, reindex=False)
-            var_forecast     = forecasts.variance.to_numpy()[0][0] # for de-scaling 
-            return_forecast  = forecasts.mean.to_numpy()[0][0]    # for de-scaling 
-            sd_forecast      = var_forecast**(0.5)
+            res                  = ar_model.fit(update_freq=0, disp="off")
+            scale                = res.scale  # New part of the code
+
+            forecasts            = res.forecast(horizon=1, reindex=False)
             
-            result_dict      = {'return_forecast': return_forecast,
-                                'sd_forecast'    : sd_forecast}
+            var_forecast         = forecasts.variance.to_numpy()[0][-1]
+
+            return_forecast      = forecasts.mean.to_numpy()[0][-1] / scale
+            
+            sd_forecast          = self.annualization_factor*(var_forecast/np.power(scale,2))**(0.5)
+
+            result_dict          = {'return_forecast': return_forecast,
+                                    'sd_forecast'    : sd_forecast}
             
             return result_dict
         
