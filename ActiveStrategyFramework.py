@@ -185,7 +185,7 @@ def generate_simulation_series(simulations,strategy_in):
 
 def aggregate_time(data,minutes = 10):
     price_range               = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
-    price_range               = price_range.set_index('time_pd',drop=False)
+    price_range               = price_range.set_index('time_pd')
     new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left')
     new_data['baseCurrency']  = new_data['baseCurrency'].ffill()
     new_data['quoteCurrency'] = new_data['quoteCurrency'].ffill()
@@ -206,7 +206,7 @@ def aggregate_price_data(data,frequency,PRICE_CHANGE_LIMIT = .9):
     
     
     price_data_aggregated                 = aggregate_time(data,minutes).copy()
-    price_data_aggregated['price_return'] = (price_data_aggregated['quotePrice'].pct_change())
+    price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()
     price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
     price_data_full                       = price_data_aggregated[1:]
     price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]

@@ -29,7 +29,7 @@ class AutoRegressiveStrategy:
     #####################################
         
     def generate_model_forecast(self,timepoint):
-            current_spot         = np.argmin(abs(self.model_data['time_pd']-timepoint))
+            current_spot         = np.argmin(abs(self.model_data.index-timepoint))
             ar_model             = arch.univariate.ARX(self.model_data['price_return'].iloc[:current_spot].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
