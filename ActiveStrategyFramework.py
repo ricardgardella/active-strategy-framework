@@ -227,7 +227,7 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,freque
     
     if token_0_usd_data is None:
         data_usd = data_in
-        data_usd['cum_fees_usd']       = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['cum_fees_usd']       = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] / data_usd['price']).cumsum()
         data_usd['value_position_usd'] = data_usd['value_position']
     else:
         # Merge in usd price data
@@ -238,7 +238,7 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,freque
         data_usd                        = pd.merge_asof(data_in,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
         
         # Compute accumulated fees and other usd metrics
-        data_usd['cum_fees_0']          = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] * data_usd['price_1_0']).cumsum()
+        data_usd['cum_fees_0']          = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] / data_usd['price']).cumsum()
         data_usd['cum_fees_usd']        = data_usd['cum_fees_0']*data_usd['price_0_usd']
         data_usd['value_position_usd']  = data_usd['value_position']*data_usd['price_0_usd']
 
@@ -263,7 +263,9 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,freque
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
         
                         'median_base_position' : (data_usd['base_position_value']/ \
-                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median()
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median(),
+        
+                        'final_value'          : data_usd['value_position_usd'].iloc[-1]
                     }
     
     return summary_strat
@@ -319,7 +321,7 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=data_strategy['price_1_0'],
+        y=1/data_strategy['price'],
         name='Price',
         line=dict(width=2,color='black')))
 
