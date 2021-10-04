@@ -133,14 +133,21 @@ class AutoRegressiveStrategy:
             model_forecast = self.generate_model_forecast(current_strat_obs.time)
                    
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
-
-        strategy_info = dict()
-        strategy_info['reset_range_lower'] = target_price * (1 + model_forecast['return_forecast'] - self.tau_param*model_forecast['sd_forecast'])
-        strategy_info['reset_range_upper'] = target_price * (1 + model_forecast['return_forecast'] + self.tau_param*model_forecast['sd_forecast'])
+        
+        # Check paramters won't lead to prices outisde the relevant range:
+        if self.alpha_param*model_forecast['sd_forecast'] > 1:
+            raise ValueError('Alpha parameter too large for measured volatility, will lead to negative prices')
+        elif self.tau_param*model_forecast['sd_forecast'] > 1:
+            raise ValueError('Tau parameter too large for measured volatility, will lead to negative prices')
 
         # Set the base range
         base_range_lower           = target_price * (1 + model_forecast['return_forecast'] - self.alpha_param*model_forecast['sd_forecast'])
         base_range_upper           = target_price * (1 + model_forecast['return_forecast'] + self.alpha_param*model_forecast['sd_forecast'])
+        
+        # Set the reset range
+        strategy_info = dict()
+        strategy_info['reset_range_lower'] = target_price * (1 + model_forecast['return_forecast'] - self.tau_param*model_forecast['sd_forecast'])
+        strategy_info['reset_range_upper'] = target_price * (1 + model_forecast['return_forecast'] + self.tau_param*model_forecast['sd_forecast'])
         
         save_ranges                = []
         
@@ -151,6 +158,8 @@ class AutoRegressiveStrategy:
         # Store each token amount supplied to pool
         total_token_0_amount = current_strat_obs.liquidity_in_0
         total_token_1_amount = current_strat_obs.liquidity_in_1
+        
+#         print('lower {} upper {} target {} return forecast {} sd forecast {}'.format(1/base_range_upper,1/base_range_lower,1/target_price,model_forecast['return_forecast'],model_forecast['sd_forecast']))
                                     
         # Lower Range
         TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001))
@@ -159,6 +168,11 @@ class AutoRegressiveStrategy:
         # Upper Range
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        
+        # Make sure Tick A < Tick B. If not make one tick
+        if TICK_A >= TICK_B:
+            TICK_B = TICK_A + current_strat_obs.tickSpacing
+
         
         liquidity_placed_base         = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
                                                                        current_strat_obs.liquidity_in_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
@@ -211,6 +225,10 @@ class AutoRegressiveStrategy:
 
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        
+        # Make sure Tick A < Tick B. If not make one tick
+        if TICK_A >= TICK_B:
+            TICK_B = TICK_A + current_strat_obs.tickSpacing
 
         liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))

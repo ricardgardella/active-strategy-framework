@@ -11,7 +11,7 @@ from itertools import compress
 
 def query_univ3_graph(query: str, variables=None) -> dict:
     univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
-    """Make graphql query to subgraph"""
+    
     if variables:
         params = {'query': query, 'variables': variables}
     else:
@@ -100,7 +100,7 @@ def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DA
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
-def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True):
+def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True,exchange_to_query='Uniswap'):
 
     request = []
     
@@ -110,12 +110,12 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
             months_to_request = pd.date_range(date_begin,date_end,freq="M").strftime("%Y-%m-%d").tolist()
                 
             for i in range(len(months_to_request)-1):             
-                request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1]),api_token))
+                request.append(run_query(generate_price_payload(token_0_address,token_1_address,months_to_request[i],months_to_request[i+1],exchange_to_query),api_token))
             with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
                 pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
         else:
             # Otherwise just download the data
-            request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end),api_token))
+            request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,exchange_to_query),api_token))
     else:
         with open('./data/'+file_name+'_1min.pkl', 'rb') as input:
             request = pickle.load(input)
@@ -169,7 +169,7 @@ def generate_event_payload(event,address,n_query):
             }'''
         return payload
     
-def generate_fist_event_payload(event,address):
+def generate_first_event_payload(event,address):
         payload = '''query{
                       pool(id:"'''+address+'''"){
                       '''+event+'''(
@@ -187,13 +187,13 @@ def generate_fist_event_payload(event,address):
                     }'''
         return payload
 
-def generate_price_payload(token_0_address,token_1_address,date_begin,date_end):
+def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,exchange_to_query='Uniswap'):
     payload =   '''{
                   ethereum(network: ethereum) {
                     dexTrades(
                       options: {asc: "timeInterval.minute"}
                       date: {between: ["'''+date_begin+'''","'''+date_end+'''"]}
-                      exchangeName: {is: "Uniswap"}
+                      exchangeName: {is: "'''+exchange_to_query+'''"}
                       baseCurrency: {is: "'''+token_0_address+'''"}
                       quoteCurrency: {is: "'''+token_1_address+'''"}
 
