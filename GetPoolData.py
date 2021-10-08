@@ -25,7 +25,7 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False):
     
     if DOWNLOAD_DATA:
 
-        current_payload = generate_fist_event_payload('swaps',contract_address)
+        current_payload = generate_first_event_payload('swaps',contract_address)
         current_id      = query_univ3_graph(current_payload)['data']['pool']['swaps'][0]['id']
         finished        = False
 

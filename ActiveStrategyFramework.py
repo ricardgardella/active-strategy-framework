@@ -5,9 +5,21 @@ import UNI_v3_funcs
 import copy
 
 class StrategyObservation:
-    def __init__(self,timepoint,current_price,strategy_in,liquidity_in_0,liquidity_in_1,fee_tier,
-                 decimals_0,decimals_1,token_0_left_over=0.0,token_1_left_over=0.0,
-                 token_0_fees=0.0,token_1_fees=0.0,liquidity_ranges=None,strategy_info = None,swaps=None):
+    def __init__(self,timepoint,
+                     current_price,
+                     strategy_in,
+                     liquidity_in_0,
+                     liquidity_in_1,
+                     fee_tier,
+                     decimals_0,
+                     decimals_1,
+                     token_0_left_over=0.0,
+                     token_1_left_over=0.0,
+                     token_0_fees=0.0,
+                     token_1_fees=0.0,
+                     liquidity_ranges=None,
+                     strategy_info = None,
+                     swaps=None):
         
         ######################################
         # 1. Store current values
@@ -61,11 +73,13 @@ class StrategyObservation:
                 self.liquidity_ranges[i]['token_0'] = amount_0
                 self.liquidity_ranges[i]['token_1'] = amount_1
                 
+                # If backtesting swaps, accrue the fees in the provided period
                 if swaps is not None:
                     fees_token_0,fees_token_1           = self.accrue_fees(swaps)
                     self.token_0_fees                   = fees_token_0
                     self.token_1_fees                   = fees_token_1
                 
+            # Check strategy and potentially reset the ranges
             self.liquidity_ranges,self.strategy_info     = strategy_in.check_strategy(self,strategy_info)
                 
     ########################################################
@@ -165,7 +179,7 @@ def simulate_strategy(price_data,swap_data,strategy_in,
                                               strategy_results[i-1].strategy_info,
                                               relevant_swaps
                                               ))
-                
+            
     return strategy_results
 
 ########################################################
