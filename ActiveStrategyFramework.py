@@ -91,6 +91,7 @@ class StrategyObservation:
         fees_earned_token_1 = 0.0
                 
         if len(relevant_swaps) > 0:
+            
             # For every swap in this time period
             for s in range(len(relevant_swaps)):
                 for i in range(len(self.liquidity_ranges)):
@@ -98,7 +99,12 @@ class StrategyObservation:
                                  (self.liquidity_ranges[i]['upper_bin_tick'] >= relevant_swaps.iloc[s]['tick_swap'])
 
                     token_0_in = relevant_swaps.iloc[s]['token_in'] == 'token0'
-                    fraction_fees_earned_position = self.liquidity_ranges[i]['position_liquidity']/relevant_swaps.iloc[s]['virtual_liquidity']
+                    
+                    # Low liquidity tokens can have zero liquidity after swap
+                    if relevant_swaps.iloc[s]['virtual_liquidity'] < 1e-9:
+                        fraction_fees_earned_position = 1
+                    else:
+                        fraction_fees_earned_position = self.liquidity_ranges[i]['position_liquidity']/relevant_swaps.iloc[s]['virtual_liquidity']
 
                     fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
                     fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
@@ -186,18 +192,35 @@ def simulate_strategy(price_data,swap_data,strategy_in,
 # Extract Strategy Data
 ########################################################
 
-def generate_simulation_series(simulations,strategy_in):
+def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
     data_strategy                    = pd.DataFrame([strategy_in.dict_components(i) for i in simulations])
     data_strategy                    = data_strategy.set_index('time',drop=False)
     data_strategy                    = data_strategy.sort_index()
-    return data_strategy
+    
+    if token_0_usd_data is None:
+        data_strategy['value_position_usd'] = data_strategy['value_position']
+        data_strategy['cum_fees_usd']       = data_strategy['token_0_fees'].cumsum() + (data_strategy['token_1_fees'] / data_strategy['price']).cumsum()
+        data_return = data_strategy
+    else:
+        # Merge in usd price data
+        token_0_usd_data['price_0_usd']    = 1/token_0_usd_data['quotePrice']
+        token_0_usd_data                   = token_0_usd_data.sort_index()
+        data_strategy['time_pd']           = pd.to_datetime(data_strategy['time'],utc=True)
+        data_strategy                      = data_strategy.set_index('time_pd')
+        data_return                        = pd.merge_asof(data_strategy,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
+        data_return['value_position_usd']  = data_return['value_position']*data_return['price_0_usd']
+        data_return['cum_fees_0']          = data_return['token_0_fees'].cumsum() + (data_return['token_1_fees'] / data_return['price']).cumsum()
+        data_return['cum_fees_usd']        = data_return['cum_fees_0']*data_return['price_0_usd']
+        
+        
+    return data_return
 
 
 ########################################################
 # Calculates % returns over a minutes frequency
 ########################################################
 
-def aggregate_time(data,minutes = 10):
+def fill_time(data):
     price_range               = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
     price_range               = price_range.set_index('time_pd')
     new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left')
@@ -206,27 +229,31 @@ def aggregate_time(data,minutes = 10):
     new_data['baseAmount']    = new_data['baseAmount'].ffill()
     new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
     new_data['quotePrice']    = new_data['quotePrice'].ffill()
-    price_set                 = set(pd.date_range(new_data.index.min(),new_data.index.max(),freq=str(minutes)+'min'))
-    return new_data[new_data.index.isin(price_set)]
+    return new_data
 
 def aggregate_price_data(data,frequency,PRICE_CHANGE_LIMIT = .9):
     
     if   frequency == 'M':
-            minutes = 1
+            resample_option      = '1 min'
     elif frequency == 'H':
-            minutes = 60
+            resample_option      = '1H'
     elif frequency == 'D':
-            minutes = 60*24
+            resample_option      = '1D'
     
-    
-    price_data_aggregated                 = aggregate_time(data,minutes).copy()
+    price_range                           = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
+    price_range                           = price_range.set_index('time_pd')
+    new_data                              = price_range.merge(data,left_index=True,right_index=True,how='left')
+    new_data['baseCurrency']              = new_data['baseCurrency'].ffill()
+    new_data['quoteCurrency']             = new_data['quoteCurrency'].ffill()
+    new_data['baseAmount']                = new_data['baseAmount'].ffill()
+    new_data['quoteAmount']               = new_data['quoteAmount'].ffill()
+    new_data['quotePrice']                = new_data['quotePrice'].ffill()
+    price_data_aggregated                 = new_data.resample(resample_option).last().copy()
     price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()
-    price_data_aggregated['log_return']   = np.log1p(price_data_aggregated.price_return)
-    price_data_full                       = price_data_aggregated[1:]
-    price_data_filtered                   = price_data_full[(price_data_full['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_full['price_return'] >= -PRICE_CHANGE_LIMIT) ]
+    price_data_filtered                   = price_data_aggregated[(price_data_aggregated['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_aggregated['price_return'] >= -PRICE_CHANGE_LIMIT) ]
     return price_data_filtered
 
-def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,frequency = 'M'):
+def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
 
     
     if   frequency == 'M':
@@ -235,27 +262,6 @@ def analyze_strategy(data_in,initial_position_value,token_0_usd_data=None,freque
             annualization_factor = 365*24
     elif frequency == 'D':
             annualization_factor = 365
-            
-    # For pools where token0 is a USD stable coin, no need to supply token_0_usd
-    # Otherwise must pass the USD price data for token 0
-    
-    if token_0_usd_data is None:
-        data_usd = data_in
-        data_usd['cum_fees_usd']       = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] / data_usd['price']).cumsum()
-        data_usd['value_position_usd'] = data_usd['value_position']
-    else:
-        # Merge in usd price data
-        token_0_usd_data['price_0_usd'] = 1/token_0_usd_data['quotePrice']
-        token_0_usd_data                = token_0_usd_data.sort_index()
-        data_in['time_pd']              = pd.to_datetime(data_in['time'],utc=True)
-        data_in                         = data_in.set_index('time_pd')
-        data_usd                        = pd.merge_asof(data_in,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
-        
-        # Compute accumulated fees and other usd metrics
-        data_usd['cum_fees_0']          = data_usd['token_0_fees'].cumsum() + (data_usd['token_1_fees'] / data_usd['price']).cumsum()
-        data_usd['cum_fees_usd']        = data_usd['cum_fees_0']*data_usd['price_0_usd']
-        data_usd['value_position_usd']  = data_usd['value_position']*data_usd['price_0_usd']
-
 
     days_strategy           = (data_usd['time'].max()-data_usd['time'].min()).days    
     strategy_last_obs       = data_usd.tail(1)
