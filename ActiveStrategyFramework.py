@@ -3,6 +3,7 @@ import numpy as np
 import math
 import UNI_v3_funcs
 import copy
+import plotly.graph_objects as go
 
 class StrategyObservation:
     def __init__(self,timepoint,
@@ -196,9 +197,14 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
     data_strategy                    = data_strategy.set_index('time',drop=False)
     data_strategy                    = data_strategy.sort_index()
     
+    token_0_initial                  = simulations[0].liquidity_ranges[0]['token_0'] + simulations[0].liquidity_ranges[1]['token_0']
+    token_1_initial                  = simulations[0].liquidity_ranges[0]['token_1'] + simulations[0].liquidity_ranges[1]['token_1']
+    
     if token_0_usd_data is None:
         data_strategy['value_position_usd'] = data_strategy['value_position']
         data_strategy['cum_fees_usd']       = data_strategy['token_0_fees'].cumsum() + (data_strategy['token_1_fees'] / data_strategy['price']).cumsum()
+        data_strategy['token_0_hold_usd']   = token_0_initial
+        data_strategy['token_1_hold_usd']   = token_1_initial / data_strategy['price']
         data_return = data_strategy
     else:
         # Merge in usd price data
@@ -210,7 +216,9 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
         data_return['value_position_usd']  = data_return['value_position']*data_return['price_0_usd']
         data_return['cum_fees_0']          = data_return['token_0_fees'].cumsum() + (data_return['token_1_fees'] / data_return['price']).cumsum()
         data_return['cum_fees_usd']        = data_return['cum_fees_0']*data_return['price_0_usd']
-        
+        data_return['token_0_hold_usd']    = token_0_initial * data_return['price_0_usd']
+        data_return['token_1_hold_usd']    = token_1_initial * data_return['price_0_usd'] / data_return['price']
+        data_return['value_hold_usd']      = data_return['token_0_hold_usd'] + data_return['token_1_hold_usd']
         
     return data_return
 
@@ -276,7 +284,7 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
                         'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
                         'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)),
                         'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),
-        
+                        'impermanent_loss'     : ((strategy_last_obs['value_position_usd'] - strategy_last_obs['value_hold_usd']) / strategy_last_obs['value_position_usd'])[0],
                         'mean_base_position'   : (data_usd['base_position_value']/ \
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
         
@@ -290,7 +298,6 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
 
 
 def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
-    import plotly.graph_objects as go
     
     CHART_SIZE = 300
 
@@ -346,9 +353,36 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
     fig_strategy.update_layout(
         margin=dict(l=20, r=20, t=40, b=20),
         height= CHART_SIZE,
-        title = 'Autoregressive Strategy Simulation',
+        title = 'Strategy Simulation',
         xaxis_title="Date",
         yaxis_title=y_axis_label,
+    )
+
+    fig_strategy.show(renderer="png")
+    
+    
+def plot_position_value(data_strategy):
+    CHART_SIZE = 300
+
+    fig_strategy = go.Figure()
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['value_position_usd'],
+        name='Value of LP Position',
+        line=dict(width=2,color='red')))
+
+    fig_strategy.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['value_hold_usd'],
+        name='Value of Holding',
+        line=dict(width=2,color='blue')))
+
+    fig_strategy.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Strategy Simulation — LP Position vs. Holding',
+        xaxis_title="Date",
+        yaxis_title='Position Value',
     )
 
     fig_strategy.show(renderer="png")
