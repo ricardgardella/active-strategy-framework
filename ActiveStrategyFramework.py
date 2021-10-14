@@ -43,7 +43,6 @@ class StrategyObservation:
         self.token_0_fees          = 0.0
         self.token_1_fees          = 0.0
         
-        
         TICK_P_PRE                 = int(math.log(self.decimal_adjustment*self.price,1.0001))        
         self.price_tick            = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
             
@@ -72,12 +71,12 @@ class StrategyObservation:
 
                 self.liquidity_ranges[i]['token_0'] = amount_0
                 self.liquidity_ranges[i]['token_1'] = amount_1
-                
-                # If backtesting swaps, accrue the fees in the provided period
-                if swaps is not None:
-                    fees_token_0,fees_token_1           = self.accrue_fees(swaps)
-                    self.token_0_fees                   = fees_token_0
-                    self.token_1_fees                   = fees_token_1
+
+            # If backtesting swaps, accrue the fees in the provided period
+            if swaps is not None:
+                fees_token_0,fees_token_1           = self.accrue_fees(swaps)
+                self.token_0_fees                   = fees_token_0
+                self.token_1_fees                   = fees_token_1
                 
             # Check strategy and potentially reset the ranges
             self.liquidity_ranges,self.strategy_info     = strategy_in.check_strategy(self,strategy_info)
@@ -231,7 +230,7 @@ def fill_time(data):
     new_data['quotePrice']    = new_data['quotePrice'].ffill()
     return new_data
 
-def aggregate_price_data(data,frequency,PRICE_CHANGE_LIMIT = .9):
+def aggregate_price_data(data,frequency):
     
     if   frequency == 'M':
             resample_option      = '1 min'
@@ -250,8 +249,7 @@ def aggregate_price_data(data,frequency,PRICE_CHANGE_LIMIT = .9):
     new_data['quotePrice']                = new_data['quotePrice'].ffill()
     price_data_aggregated                 = new_data.resample(resample_option).last().copy()
     price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()
-    price_data_filtered                   = price_data_aggregated[(price_data_aggregated['price_return'] <= PRICE_CHANGE_LIMIT) & (price_data_aggregated['price_return'] >= -PRICE_CHANGE_LIMIT) ]
-    return price_data_filtered
+    return price_data_aggregated
 
 def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
 

@@ -141,6 +141,47 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
 
     return price_data
 
+def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True):
+
+    request = []
+    
+    if DOWNLOAD_DATA:        
+        if RATE_LIMIT:
+            # Break out into months to rate limit
+            months_to_request = pd.date_range(date_begin,date_end,freq="M").strftime("%Y-%m-%d").tolist()
+                
+            for i in range(len(months_to_request)-1):             
+                request.append(run_query(generate_usd_price_payload(token_address,months_to_request[i],months_to_request[i+1]),api_token))
+            with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
+                pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
+        else:
+            # Otherwise just download the data
+            request.append(run_query(generate_usd_price_payload(token_address,date_begin,date_end),api_token))
+    else:
+        with open('./data/'+file_name+'_1min.pkl', 'rb') as input:
+            request = pickle.load(input)
+
+    # Prepare data for strategy:
+    # Collect json data and add to a pandas Data Frame
+    
+    requests_with_data = [len(x['data']['ethereum']['dexTrades']) > 0 for x in request]
+    relevant_requests  = list(compress(request, requests_with_data))
+    
+    price_data = pd.concat([pd.DataFrame({
+    'time':           [x['timeInterval']['minute'] for x in request_price['data']['ethereum']['dexTrades']],
+    'baseCurrency':   [x['baseCurrency']['symbol'] for x in request_price['data']['ethereum']['dexTrades']],
+    'quoteCurrency':  [x['quoteCurrency']['symbol'] for x in request_price['data']['ethereum']['dexTrades']],
+    'quoteAmount':    [x['quoteAmount'] for x in request_price['data']['ethereum']['dexTrades']],
+    'baseAmount':     [x['baseAmount'] for x in request_price['data']['ethereum']['dexTrades']],
+    'quotePrice':     [x['quotePrice'] for x in request_price['data']['ethereum']['dexTrades']]
+    }) for request_price in relevant_requests])
+    
+    price_data['time']    = pd.to_datetime(price_data['time'], format = '%Y-%m-%d %H:%M:%S')
+    price_data['time_pd'] = pd.to_datetime(price_data['time'],utc=True)
+    price_data            = price_data.set_index('time_pd')
+
+    return price_data
+
 ##############################################################
 # Generate payload for bitquery events
 ##############################################################
@@ -196,6 +237,39 @@ def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,e
                       exchangeName: {is: "'''+exchange_to_query+'''"}
                       baseCurrency: {is: "'''+token_0_address+'''"}
                       quoteCurrency: {is: "'''+token_1_address+'''"}
+
+                    ) {
+                      timeInterval {
+                        minute(count: 1)
+                      }
+                      baseCurrency {
+                        symbol
+                        address
+                      }
+                      baseAmount
+                      quoteCurrency {
+                        symbol
+                        address
+                      }
+                      quoteAmount
+                      quotePrice
+                    }
+                  }
+                }'''
+    
+    return payload
+
+
+def generate_usd_price_payload(token_address,date_begin,date_end):
+    payload =   '''{
+                  ethereum(network: ethereum) {
+                    dexTrades(
+                      options: {asc: "timeInterval.minute"}
+                      date: {between: ["'''+date_begin+'''","'''+date_end+'''"]}
+                      any: [{baseCurrency: {is: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"},
+                             quoteCurrency:{is: "'''+token_address+'''"}},
+                            {baseCurrency: {is: "0xdac17f958d2ee523a2206206994597c13d831ec7"},
+                             quoteCurrency:{is: "'''+token_address+'''"}}]
 
                     ) {
                       timeInterval {
