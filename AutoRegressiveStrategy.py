@@ -48,7 +48,7 @@ class AutoRegressiveStrategy:
     def generate_model_forecast(self,timepoint):
         
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
-            current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='left',origin=timepoint).last()            
+            current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
             current_data['price_return']  = current_data['quotePrice'].pct_change()
             
             ar_model             = arch.univariate.ARX(current_data.price_return[1:].to_numpy(), lags=1,rescale=True)
