@@ -6,7 +6,7 @@ import UNI_v3_funcs
 import logging
 import ActiveStrategyFramework
 
-logging.basicConfig(filename='ar_strategy.log',level=logging.INFO)
+# logging.basicConfig(filename='ar_strategy.log',level=logging.INFO)
 
 
 class AlphaParameterException(Exception):
@@ -50,13 +50,12 @@ class AutoRegressiveStrategy:
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
             current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='left',origin=timepoint).last()            
             current_data['price_return']  = current_data['quotePrice'].pct_change()
-            current_data['log_return']    = np.log1p(current_data.price_return)
             
             ar_model             = arch.univariate.ARX(current_data.price_return[1:].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
             res                  = ar_model.fit(update_freq=0, disp="off")
-            scale                = res.scale  # New part of the code
+            scale                = res.scale
 
             forecasts            = res.forecast(horizon=1, reindex=False)
             
@@ -166,11 +165,11 @@ class AutoRegressiveStrategy:
         
         # Check paramters won't lead to prices outisde the relevant range:
         if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Alpha parameter {} too large for measured volatility, will lead to negative prices: sd {} band =  {} target {}'. \
-                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],1 + model_forecast['return_forecast']))
+            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band =  {:.3f} current {:.3f}'. \
+                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],current_strat_obs.price))
         elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Tau parameter {} too large for measured volatility, will lead to negative prices: sd {} band =  {} target {}'. \
-                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],1 + model_forecast['return_forecast']))
+            raise AlphaParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band =  {:.3f} current {:.3f}'. \
+                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],current_strat_obs.price))
 
         # Set the base range
         base_range_lower           = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.alpha_param*model_forecast['sd_forecast'])
@@ -190,6 +189,14 @@ class AutoRegressiveStrategy:
         # Store each token amount supplied to pool
         total_token_0_amount = current_strat_obs.liquidity_in_0
         total_token_1_amount = current_strat_obs.liquidity_in_1
+        
+#         logging.info('BASE POSITION: lower {} | upper {} | current {} | target {} \n return forecast {} | sd forecast {} | reset reason {} | time {}'.format(base_range_lower,
+#                                                                                                               base_range_upper,current_strat_obs.price,
+#                                                                                                               target_price,
+#                                                                                                               model_forecast['return_forecast'],
+#                                                                                                               model_forecast['sd_forecast'],
+#                                                                                                               current_strat_obs.reset_reason,
+#                                                                                                               current_strat_obs.time))
                                     
         # Lower Range
         TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001))
@@ -209,19 +216,10 @@ class AutoRegressiveStrategy:
         liquidity_placed_base   = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
                                                                        current_strat_obs.liquidity_in_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
         
-        logging.info('lower {} | upper {} | target {} | return forecast {} | sd forecast {} | reset reason {}'.format(base_range_lower,
-                                                                                                                      base_range_upper,
-                                                                                                                      target_price,
-                                                                                                                      model_forecast['return_forecast'],
-                                                                                                                      model_forecast['sd_forecast'],
-                                                                                                                      current_strat_obs.reset_reason))
-        
-        logging.info('token 0: {} | token 1: {} | liquidity {}'.format(current_strat_obs.liquidity_in_0,current_strat_obs.liquidity_in_1,liquidity_placed_base))
-        
         base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,liquidity_placed_base\
                                                                  ,current_strat_obs.decimals_0,current_strat_obs.decimals_1)
         
-        logging.info('base 0: {} | base 1: {}'.format(base_0_amount,base_1_amount))
+#         logging.info('base 0: {} | base 1: {}'.format(base_0_amount,base_1_amount))
         
         total_token_0_amount  -= base_0_amount
         total_token_1_amount  -= base_1_amount
@@ -267,14 +265,26 @@ class AutoRegressiveStrategy:
 
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        
+#         logging.info('LIMIT POSITION: lower {} | upper {}'.format(limit_range_lower,limit_range_upper))
+        
+        # Make sure Tick A < Tick B. If not make one tick
+        # Relevant mostly for stablecoin pairs
+        if TICK_A == TICK_B:
+            TICK_B = TICK_A + current_strat_obs.tickSpacing
+        elif TICK_A > TICK_B:
+            if limit_amount_0*current_strat_obs.price > limit_amount_1:
+                TICK_B = TICK_A + current_strat_obs.tickSpacing
+            else: 
+                TICK_A = TICK_B - current_strat_obs.tickSpacing
 
         liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
         limit_0_amount,limit_1_amount =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,\
                                                                      liquidity_placed_limit,current_strat_obs.decimals_0,current_strat_obs.decimals_1)  
+        
                      
-                     
-        logging.info('limit 0: {} | limit 1: {}'.format(limit_0_amount,limit_1_amount))
+#         logging.info('limit 0: {} | limit 1: {}'.format(limit_0_amount,limit_1_amount))
 
         limit_liq_range =       {'price'              : current_strat_obs.price,
                                  'target_price'       : target_price,
