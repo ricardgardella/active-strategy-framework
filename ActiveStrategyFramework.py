@@ -16,8 +16,8 @@ class StrategyObservation:
                      decimals_1,
                      token_0_left_over=0.0,
                      token_1_left_over=0.0,
-                     token_0_fees=0.0,
-                     token_1_fees=0.0,
+                     token_0_fees_uncollected=0.0,
+                     token_1_fees_uncollected=0.0,
                      liquidity_ranges=None,
                      strategy_info = None,
                      swaps=None):
@@ -26,26 +26,26 @@ class StrategyObservation:
         # 1. Store current values
         ######################################
         
-        self.time                  = timepoint
-        self.price                 = current_price
-        self.liquidity_in_0        = liquidity_in_0
-        self.liquidity_in_1        = liquidity_in_1
-        self.fee_tier              = fee_tier
-        self.decimals_0            = decimals_0
-        self.decimals_1            = decimals_1
-        self.token_0_left_over     = token_0_left_over
-        self.token_1_left_over     = token_1_left_over
-        self.token_0_fees_accum    = token_0_fees
-        self.token_1_fees_accum    = token_1_fees
-        self.reset_point           = False
-        self.reset_reason          = ''
-        self.decimal_adjustment    = 10**(self.decimals_1  - self.decimals_0)
-        self.tickSpacing           = int(self.fee_tier*2*10000)   
-        self.token_0_fees          = 0.0
-        self.token_1_fees          = 0.0
+        self.time                        = timepoint
+        self.price                       = current_price
+        self.liquidity_in_0              = liquidity_in_0
+        self.liquidity_in_1              = liquidity_in_1
+        self.fee_tier                    = fee_tier
+        self.decimals_0                  = decimals_0
+        self.decimals_1                  = decimals_1
+        self.token_0_left_over           = token_0_left_over
+        self.token_1_left_over           = token_1_left_over
+        self.token_0_fees_uncollected    = token_0_fees_uncollected
+        self.token_1_fees_uncollected    = token_1_fees_uncollected
+        self.reset_point                 = False
+        self.reset_reason                = ''
+        self.decimal_adjustment          = 10**(self.decimals_1  - self.decimals_0)
+        self.tickSpacing                 = int(self.fee_tier*2*10000)   
+        self.token_0_fees                = 0.0
+        self.token_1_fees                = 0.0
         
-        TICK_P_PRE                 = int(math.log(self.decimal_adjustment*self.price,1.0001))        
-        self.price_tick            = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
+        TICK_P_PRE                       = int(math.log(self.decimal_adjustment*self.price,1.0001))        
+        self.price_tick                  = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
             
         ######################################
         # 2. Execute the strategy
@@ -109,8 +109,8 @@ class StrategyObservation:
                     fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
                     fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
         
-        self.token_0_fees_accum += fees_earned_token_0
-        self.token_1_fees_accum += fees_earned_token_1
+        self.token_0_fees_uncollected += fees_earned_token_0
+        self.token_1_fees_uncollected += fees_earned_token_1
         
         return fees_earned_token_0,fees_earned_token_1            
      
@@ -136,14 +136,14 @@ class StrategyObservation:
             removed_amount_0   += token_amounts[0]
             removed_amount_1   += token_amounts[1]
         
-        self.liquidity_in_0 = removed_amount_0 + self.token_0_left_over + self.token_0_fees_accum
-        self.liquidity_in_1 = removed_amount_1 + self.token_1_left_over + self.token_1_fees_accum
+        self.liquidity_in_0 = removed_amount_0 + self.token_0_left_over + self.token_0_fees_uncollected
+        self.liquidity_in_1 = removed_amount_1 + self.token_1_left_over + self.token_1_fees_uncollected
         
         self.token_0_left_over = 0.0
         self.token_1_left_over = 0.0
         
-        self.token_0_fees_accum = 0.0
-        self.token_1_fees_accum = 0.0
+        self.token_0_fees_uncollected = 0.0
+        self.token_1_fees_uncollected = 0.0
         
    
 ########################################################
@@ -179,12 +179,11 @@ def simulate_strategy(price_data,swap_data,strategy_in,
                                               strategy_results[i-1].decimals_1,
                                               strategy_results[i-1].token_0_left_over,
                                               strategy_results[i-1].token_1_left_over,
-                                              strategy_results[i-1].token_0_fees,
-                                              strategy_results[i-1].token_1_fees,
+                                              strategy_results[i-1].token_0_fees_uncollected,
+                                              strategy_results[i-1].token_1_fees_uncollected,
                                               strategy_results[i-1].liquidity_ranges,
                                               strategy_results[i-1].strategy_info,
-                                              relevant_swaps
-                                              ))
+                                              relevant_swaps))
             
     return strategy_results
 
@@ -205,6 +204,7 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
         data_strategy['cum_fees_usd']       = data_strategy['token_0_fees'].cumsum() + (data_strategy['token_1_fees'] / data_strategy['price']).cumsum()
         data_strategy['token_0_hold_usd']   = token_0_initial
         data_strategy['token_1_hold_usd']   = token_1_initial / data_strategy['price']
+        data_strategy['value_hold_usd']     = data_strategy['token_0_hold_usd'] + data_strategy['token_1_hold_usd']
         data_return = data_strategy
     else:
         # Merge in usd price data
