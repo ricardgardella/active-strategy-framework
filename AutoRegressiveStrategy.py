@@ -165,11 +165,11 @@ class AutoRegressiveStrategy:
         
         # Check paramters won't lead to prices outisde the relevant range:
         if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band =  {:.3f} current {:.3f}'. \
-                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],current_strat_obs.price))
+            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f}'. \
+                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast']),current_strat_obs.price))
         elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band =  {:.3f} current {:.3f}'. \
-                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],current_strat_obs.price))
+            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f}'. \
+                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast']),current_strat_obs.price))
 
         # Set the base range
         base_range_lower           = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.alpha_param*model_forecast['sd_forecast'])
