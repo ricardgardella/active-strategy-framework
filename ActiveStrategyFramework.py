@@ -236,6 +236,8 @@ def fill_time(data):
     new_data['baseAmount']    = new_data['baseAmount'].ffill()
     new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
     new_data['quotePrice']    = new_data['quotePrice'].ffill()
+    new_data['tradeAmount']   = new_data['tradeAmount'].fillna(0)
+    
     return new_data
 
 def aggregate_price_data(data,frequency):
