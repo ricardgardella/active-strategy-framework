@@ -132,6 +132,7 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     'quoteCurrency':  [x['quoteCurrency']['symbol'] for x in request_price['data']['ethereum']['dexTrades']],
     'quoteAmount':    [x['quoteAmount'] for x in request_price['data']['ethereum']['dexTrades']],
     'baseAmount':     [x['baseAmount'] for x in request_price['data']['ethereum']['dexTrades']],
+    'tradeAmount':    [x['tradeAmount'] for x in request_price['data']['ethereum']['dexTrades']],
     'quotePrice':     [x['quotePrice'] for x in request_price['data']['ethereum']['dexTrades']]
     }) for request_price in relevant_requests])
     
@@ -251,6 +252,7 @@ def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,e
                         symbol
                         address
                       }
+                      tradeAmount(in: USD)
                       quoteAmount
                       quotePrice
                     }

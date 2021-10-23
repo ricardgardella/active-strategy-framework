@@ -5,7 +5,7 @@ import arch
 import UNI_v3_funcs
 import logging
 import ActiveStrategyFramework
-
+import scipy
 # logging.basicConfig(filename='ar_strategy.log',level=logging.INFO)
 
 
@@ -21,7 +21,7 @@ class BoundsInvertedError(Exception):
 class AutoRegressiveStrategy:
     def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D'):
         
-        self.model_data             = ActiveStrategyFramework.fill_time(model_data)     
+        self.model_data             = self.clean_data_for_garch(model_data)
         self.alpha_param            = alpha_param
         self.tau_param              = tau_param
         self.volatility_reset_ratio = volatility_reset_ratio
@@ -44,6 +44,14 @@ class AutoRegressiveStrategy:
     #####################################
     # Estimate AR model at current timepoint
     #####################################
+    
+    def clean_data_for_garch(self,data_in):
+            z_score_cutoff          = 5
+            data_filled             = ActiveStrategyFramework.fill_time(data_in)
+            data_filled['z_scores'] = np.abs(scipy.stats.zscore(data_filled['quotePrice']))
+            data_filled             = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
+            return data_filled
+        
         
     def generate_model_forecast(self,timepoint):
         
@@ -51,7 +59,7 @@ class AutoRegressiveStrategy:
             current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
             current_data['price_return']  = current_data['quotePrice'].pct_change()
             
-            ar_model             = arch.univariate.ARX(current_data.price_return[1:].to_numpy(), lags=1,rescale=True)
+            ar_model             = arch.univariate.ARX(current_data.price_return[(timepoint - pd.Timedelta('90 days')):].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
             res                  = ar_model.fit(update_freq=0, disp="off")
@@ -124,7 +132,6 @@ class AutoRegressiveStrategy:
         
         if (left_over_balance > self.tokens_outside_reset * (LIMIT_ORDER_BALANCE + BASE_ORDER_BALANCE)):
             TOKENS_OUTSIDE_LARGE = True
-#             logging.info('left_over_balance: {}'.format(left_over_balance,(LIMIT_ORDER_BALANCE + BASE_ORDER_BALANCE)))
         else:
             TOKENS_OUTSIDE_LARGE = False
         
@@ -144,7 +151,6 @@ class AutoRegressiveStrategy:
             current_strat_obs.remove_liquidity()
             
             # Reset liquidity            
-            # TODO: Clean up returns
             liq_range,strategy_info = self.set_liquidity_ranges(current_strat_obs,model_forecast)
             return liq_range,strategy_info        
         else:
