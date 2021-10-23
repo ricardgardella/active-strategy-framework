@@ -236,6 +236,8 @@ def fill_time(data):
     new_data['baseAmount']    = new_data['baseAmount'].ffill()
     new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
     new_data['quotePrice']    = new_data['quotePrice'].ffill()
+    new_data['tradeAmount']   = new_data['tradeAmount'].fillna(0)
+    
     return new_data
 
 def aggregate_price_data(data,frequency):
@@ -284,7 +286,7 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
                         'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
                         'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)),
                         'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),
-                        'impermanent_loss'     : ((strategy_last_obs['value_position_usd'] - strategy_last_obs['value_hold_usd']) / strategy_last_obs['value_position_usd'])[0],
+                        'impermanent_loss'     : ((strategy_last_obs['value_position_usd'] - strategy_last_obs['value_hold_usd']) / strategy_last_obs['value_hold_usd'])[0],
                         'mean_base_position'   : (data_usd['base_position_value']/ \
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
         
@@ -386,3 +388,44 @@ def plot_position_value(data_strategy):
     )
 
     fig_strategy.show(renderer="png")
+    
+    
+def plot_asset_composition(data_strategy,token_0_name,token_1_name):
+
+    CHART_SIZE = 300
+    # 3 - Asset Composition
+    fig_composition = go.Figure()
+    fig_composition.add_trace(go.Scatter(
+        x=data_strategy['time'], y=data_strategy['token_0_total'],
+        mode='lines',
+        name=token_0_name,
+        line=dict(width=0.5, color='#ff0000'),
+        stackgroup='one', # define stack group
+        groupnorm='percent'
+    ))
+    fig_composition.add_trace(go.Scatter(
+        x=data_strategy['time'], y=data_strategy['token_1_total']/data_strategy['price'],
+        mode='lines',
+        name=token_1_name,
+        line=dict(width=0.5, color='#f4f4f4'),
+        stackgroup='one'
+    ))
+
+    fig_composition.update_layout(
+        showlegend=True,
+        xaxis_type='date',
+        yaxis=dict(
+            type='linear',
+            range=[1, 100],
+            ticksuffix='%'))
+
+    fig_composition.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Position Asset Composition',
+        xaxis_title="Date",
+        yaxis_title="Position %",
+        legend_title='Token'
+    )
+
+    fig_composition.show(renderer="png")
