@@ -46,10 +46,13 @@ class AutoRegressiveStrategy:
     #####################################
     
     def clean_data_for_garch(self,data_in):
-            z_score_cutoff          = 5
-            data_filled             = ActiveStrategyFramework.fill_time(data_in)
-            data_filled['z_scores'] = np.abs(scipy.stats.zscore(data_filled['quotePrice']))
-            data_filled             = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
+            z_score_cutoff               = 3
+            data_filled                  = ActiveStrategyFramework.fill_time(data_in)
+            data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['quotePrice']))
+            data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
+            data_filled['price_return']  = data_filled['quotePrice'].pct_change()
+            data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['quotePrice']))
+            data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
             return data_filled
         
         
@@ -166,16 +169,22 @@ class AutoRegressiveStrategy:
         # Fit model
         if model_forecast is None:
             model_forecast = self.generate_model_forecast(current_strat_obs.time)
-                   
+            
+        # Limit return prediction to a 25% change
+        if np.abs(model_forecast['return_forecast']) > .25:
+                    model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast'])*.25
+                
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
         
         # Check paramters won't lead to prices outisde the relevant range:
         if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f}'. \
-                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price))
+            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
+                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
+                                                 current_strat_obs.time))
         elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f}'. \
-                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price))
+            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
+                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
+                                                 current_strat_obs.time))
 
         # Set the base range
         base_range_lower           = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.alpha_param*model_forecast['sd_forecast'])
