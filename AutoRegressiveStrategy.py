@@ -61,8 +61,9 @@ class AutoRegressiveStrategy:
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
             current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
             current_data['price_return']  = current_data['quotePrice'].pct_change()
+            current_data                  = current_data.dropna(axis=0)
             
-            ar_model             = arch.univariate.ARX(current_data.price_return[(timepoint - pd.Timedelta('90 days')):].to_numpy(), lags=1,rescale=True)
+            ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('90 days')))].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
             res                  = ar_model.fit(update_freq=0, disp="off")
