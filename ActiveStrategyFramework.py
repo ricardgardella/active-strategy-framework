@@ -3,7 +3,6 @@ import numpy as np
 import math
 import UNI_v3_funcs
 import copy
-import plotly.graph_objects as go
 
 class StrategyObservation:
     def __init__(self,timepoint,
@@ -14,13 +13,14 @@ class StrategyObservation:
                      fee_tier,
                      decimals_0,
                      decimals_1,
-                     token_0_left_over=0.0,
-                     token_1_left_over=0.0,
-                     token_0_fees_uncollected=0.0,
-                     token_1_fees_uncollected=0.0,
-                     liquidity_ranges=None,
-                     strategy_info = None,
-                     swaps=None):
+                     token_0_left_over        = 0.0,
+                     token_1_left_over        = 0.0,
+                     token_0_fees_uncollected = 0.0,
+                     token_1_fees_uncollected = 0.0,
+                     liquidity_ranges         = None,
+                     strategy_info            = None,
+                     swaps                    = None,
+                     simulate_strat           = True):
         
         ######################################
         # 1. Store current values
@@ -43,6 +43,7 @@ class StrategyObservation:
         self.tickSpacing                 = int(self.fee_tier*2*10000)   
         self.token_0_fees                = 0.0
         self.token_1_fees                = 0.0
+        self.simulate_strat              = simulate_strat
         
         TICK_P_PRE                       = int(math.log(self.decimal_adjustment*self.price,1.0001))        
         self.price_tick                  = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
@@ -62,16 +63,18 @@ class StrategyObservation:
             
             # Update amounts in each position according to current pool price
             for i in range(len(self.liquidity_ranges)):
-                self.liquidity_ranges[i]['time'] = self.time                
-                amount_0, amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,
-                                                             self.liquidity_ranges[i]['lower_bin_tick'],
-                                                             self.liquidity_ranges[i]['upper_bin_tick'],
-                                                             self.liquidity_ranges[i]['position_liquidity'],
-                                                             self.decimals_0,
-                                                             self.decimals_1)
+                self.liquidity_ranges[i]['time'] = self.time
+                
+                if self.simulate_strat:
+                    amount_0, amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,
+                                                                 self.liquidity_ranges[i]['lower_bin_tick'],
+                                                                 self.liquidity_ranges[i]['upper_bin_tick'],
+                                                                 self.liquidity_ranges[i]['position_liquidity'],
+                                                                 self.decimals_0,
+                                                                 self.decimals_1)
 
-                self.liquidity_ranges[i]['token_0'] = amount_0
-                self.liquidity_ranges[i]['token_1'] = amount_1
+                    self.liquidity_ranges[i]['token_0'] = amount_0
+                    self.liquidity_ranges[i]['token_1'] = amount_1
 
             # If backtesting swaps, accrue the fees in the provided period
             if swaps is not None:
@@ -300,7 +303,7 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
 
 
 def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
-    
+    import plotly.graph_objects as go
     CHART_SIZE = 300
 
     fig_strategy = go.Figure()
@@ -364,6 +367,7 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
     
     
 def plot_position_value(data_strategy):
+    import plotly.graph_objects as go
     CHART_SIZE = 300
 
     fig_strategy = go.Figure()
@@ -391,7 +395,7 @@ def plot_position_value(data_strategy):
     
     
 def plot_asset_composition(data_strategy,token_0_name,token_1_name):
-
+    import plotly.graph_objects as go
     CHART_SIZE = 300
     # 3 - Asset Composition
     fig_composition = go.Figure()

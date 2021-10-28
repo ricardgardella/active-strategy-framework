@@ -257,7 +257,7 @@ class AutoRegressiveStrategy:
         save_ranges.append(base_liq_range)
 
         ###########################
-        # Set Limit Position according to probability distribution
+        # Step 3: Set Limit Position 
         ############################
         
         limit_amount_0 = total_token_0_amount
