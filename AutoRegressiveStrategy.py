@@ -19,7 +19,7 @@ class BoundsInvertedError(Exception):
     pass
 
 class AutoRegressiveStrategy:
-    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D'):
+    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5):
         
         self.model_data             = self.clean_data_for_garch(model_data)
         self.alpha_param            = alpha_param
@@ -27,6 +27,7 @@ class AutoRegressiveStrategy:
         self.volatility_reset_ratio = volatility_reset_ratio
         self.data_frequency         = data_frequency
         self.tokens_outside_reset   = tokens_outside_reset
+        self.default_width          = default_width
         
         # Allow for different input data frequencies, always get 1 day ahead forecast
         # Model data frequency is expressed in minutes
@@ -138,10 +139,19 @@ class AutoRegressiveStrategy:
             TOKENS_OUTSIDE_LARGE = True
         else:
             TOKENS_OUTSIDE_LARGE = False
+            
+        if 'force_initial_reset' in strategy_info:
+            if strategy_info['force_initial_reset']:
+                INITIAL_RESET                        = True
+                strategy_info['force_initial_reset'] = False
+            else:
+                INITIAL_RESET = False
+        else:
+            INITIAL_RESET = False
         
 
         # if a reset is necessary
-        if (((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | VOL_REBALANCE) | TOKENS_OUTSIDE_LARGE):
+        if ((((LEFT_RANGE_LOW | LEFT_RANGE_HIGH) | VOL_REBALANCE) | TOKENS_OUTSIDE_LARGE) | INITIAL_RESET):
             current_strat_obs.reset_point = True
             
             if (LEFT_RANGE_LOW | LEFT_RANGE_HIGH):
@@ -150,6 +160,8 @@ class AutoRegressiveStrategy:
                 current_strat_obs.reset_reason = 'vol_rebalance'
             elif TOKENS_OUTSIDE_LARGE:
                 current_strat_obs.reset_reason = 'tokens_outside_large'
+            elif INITIAL_RESET:
+                current_strat_obs.reset_reason = 'initial_reset'
             
             # Remove liquidity and claim fees 
             current_strat_obs.remove_liquidity()
@@ -176,16 +188,6 @@ class AutoRegressiveStrategy:
                     model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast'])*.25
                 
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
-        
-        # Check paramters won't lead to prices outisde the relevant range:
-        if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
-                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
-                                                 current_strat_obs.time))
-        elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
-                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
-                                                 current_strat_obs.time))
 
         # Set the base range
         base_range_lower           = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.alpha_param*model_forecast['sd_forecast'])
@@ -195,6 +197,17 @@ class AutoRegressiveStrategy:
         strategy_info = dict()
         strategy_info['reset_range_lower'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.tau_param*model_forecast['sd_forecast'])
         strategy_info['reset_range_upper'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.tau_param*model_forecast['sd_forecast'])
+        
+        # Check parameters won't lead to prices outisde the relevant range:
+        if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
+            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
+                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
+                                                 current_strat_obs.time))
+        elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
+            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
+                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
+                                                 current_strat_obs.time))
+        
         
         save_ranges                = []
         
