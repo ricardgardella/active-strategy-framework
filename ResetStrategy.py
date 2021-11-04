@@ -212,8 +212,8 @@ class ResetStrategy:
             # Fee Varaibles
             this_data['token_0_fees']           = strategy_observation.token_0_fees 
             this_data['token_1_fees']           = strategy_observation.token_1_fees 
-            this_data['token_0_fees_accum']     = strategy_observation.token_0_fees_accum
-            this_data['token_1_fees_accum']     = strategy_observation.token_1_fees_accum
+            this_data['token_0_fees_uncollected']     = strategy_observation.token_0_fees_uncollected
+            this_data['token_1_fees_uncollected']     = strategy_observation.token_1_fees_uncollected
             
             # Asset Variables
             this_data['token_0_left_over']      = strategy_observation.token_0_left_over

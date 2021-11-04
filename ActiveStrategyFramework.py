@@ -365,6 +365,8 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
 
     fig_strategy.show(renderer="png")
     
+    return fig_strategy
+    
     
 def plot_position_value(data_strategy):
     import plotly.graph_objects as go
@@ -392,6 +394,8 @@ def plot_position_value(data_strategy):
     )
 
     fig_strategy.show(renderer="png")
+    
+    return fig_strategy
     
     
 def plot_asset_composition(data_strategy,token_0_name,token_1_name):
@@ -433,3 +437,5 @@ def plot_asset_composition(data_strategy,token_0_name,token_1_name):
     )
 
     fig_composition.show(renderer="png")
+    
+    return fig_composition
