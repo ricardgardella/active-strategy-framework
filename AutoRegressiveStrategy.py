@@ -8,16 +8,6 @@ import ActiveStrategyFramework
 import scipy
 # logging.basicConfig(filename='ar_strategy.log',level=logging.INFO)
 
-
-class AlphaParameterException(Exception):
-    pass
-
-class TauParameterException(Exception):
-    pass
-
-class BoundsInvertedError(Exception):
-    pass
-
 class AutoRegressiveStrategy:
     def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5):
         
@@ -198,16 +188,9 @@ class AutoRegressiveStrategy:
         strategy_info['reset_range_lower'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.tau_param*model_forecast['sd_forecast'])
         strategy_info['reset_range_upper'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.tau_param*model_forecast['sd_forecast'])
         
-        # Check parameters won't lead to prices outisde the relevant range:
-        if self.alpha_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise AlphaParameterException('Alpha parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
-                                          format(self.alpha_param,model_forecast['sd_forecast'],self.alpha_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
-                                                 current_strat_obs.time))
-        elif self.tau_param*model_forecast['sd_forecast'] > (1 + model_forecast['return_forecast']):
-            raise TauParameterException('Tau parameter {:.3f} too large for measured volatility, will lead to negative prices: sd {:.3f} band {:.3f} forecast {:.3f} current {:.6f} time {}'. \
-                                          format(self.tau_param,model_forecast['sd_forecast'],self.tau_param*model_forecast['sd_forecast'],model_forecast['return_forecast'],current_strat_obs.price,
-                                                 current_strat_obs.time))
-        
+        # If volatility is high enough reset range is less than zero, set at default_width of current price
+        if strategy_info['reset_range_lower'] < 0.0:
+            strategy_info['reset_range_lower'] = self.default_width * current_strat_obs.price
         
         save_ranges                = []
         
@@ -228,8 +211,13 @@ class AutoRegressiveStrategy:
 #                                                                                                               current_strat_obs.time))
                                     
         # Lower Range
-        TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001))
-        TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        if base_range_lower > 0.0:
+            TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001))
+            TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        else:
+            # If lower end of base range is negative, fix at 0.0
+            base_range_lower   = 0.0
+            TICK_A             = round(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
 
         # Upper Range
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001))
@@ -238,9 +226,6 @@ class AutoRegressiveStrategy:
         # Make sure Tick A < Tick B. If not make one tick
         if TICK_A == TICK_B:
             TICK_B = TICK_A + current_strat_obs.tickSpacing
-        elif TICK_A > TICK_B:
-            raise BoundsInvertedError
-
         
         liquidity_placed_base   = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
                                                                        current_strat_obs.liquidity_in_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
@@ -288,9 +273,12 @@ class AutoRegressiveStrategy:
             limit_range_lower = base_range_lower
             limit_range_upper = current_strat_obs.price
             
-            
-        TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*limit_range_lower,1.0001))
-        TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        if limit_range_lower > 0.0:
+            TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*limit_range_lower,1.0001))
+            TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        else:
+            TICK_A             = round(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
+                
 
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
