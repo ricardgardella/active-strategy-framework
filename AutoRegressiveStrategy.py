@@ -185,8 +185,8 @@ class AutoRegressiveStrategy:
         
         # Set the reset range
         strategy_info = dict()
-        strategy_info['reset_range_lower'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.tau_param*model_forecast['sd_forecast'])
-        strategy_info['reset_range_upper'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.tau_param*model_forecast['sd_forecast'])
+        strategy_info['reset_range_lower'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.tau_param*self.alpha_param*model_forecast['sd_forecast'])
+        strategy_info['reset_range_upper'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.tau_param*self.alpha_param*model_forecast['sd_forecast'])
         
         # If volatility is high enough reset range is less than zero, set at default_width of current price
         if strategy_info['reset_range_lower'] < 0.0:
