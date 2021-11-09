@@ -88,8 +88,8 @@ class AutoRegressiveStrategy:
         #####################################
         
         model_forecast      = None
-        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1']*current_strat_obs.price
-        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1']*current_strat_obs.price
+        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1'] / current_strat_obs.price
+        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1'] / current_strat_obs.price
         
         #######################
         # 1. Leave Reset Range
@@ -121,7 +121,7 @@ class AutoRegressiveStrategy:
         # 3. Tokens outside of pool greater than 5% of value of LP position
         #######################
         
-        left_over_balance = current_strat_obs.token_0_left_over + current_strat_obs.token_1_left_over*current_strat_obs.price                
+        left_over_balance = current_strat_obs.token_0_left_over + current_strat_obs.token_1_left_over / current_strat_obs.price                
         
         if (left_over_balance > self.tokens_outside_reset * (LIMIT_ORDER_BALANCE + BASE_ORDER_BALANCE)):
             TOKENS_OUTSIDE_LARGE = True
@@ -348,8 +348,8 @@ class AutoRegressiveStrategy:
             this_data['reset_range_upper']      = strategy_observation.strategy_info['reset_range_upper']
             
             # Fee Varaibles
-            this_data['token_0_fees']           = strategy_observation.token_0_fees 
-            this_data['token_1_fees']           = strategy_observation.token_1_fees 
+            this_data['token_0_fees']                 = strategy_observation.token_0_fees 
+            this_data['token_1_fees']                 = strategy_observation.token_1_fees 
             this_data['token_0_fees_uncollected']     = strategy_observation.token_0_fees_uncollected
             this_data['token_1_fees_uncollected']     = strategy_observation.token_1_fees_uncollected
             
@@ -373,7 +373,7 @@ class AutoRegressiveStrategy:
             this_data['value_allocated']        = this_data['token_0_allocated'] + this_data['token_1_allocated'] / this_data['price']
             this_data['value_left_over']        = this_data['token_0_left_over'] + this_data['token_1_left_over'] / this_data['price']
             
-            this_data['base_position_value']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] * this_data['price']
-            this_data['limit_position_value']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] * this_data['price']
+            this_data['base_position_value']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] / this_data['price']
+            this_data['limit_position_value']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] / this_data['price']
              
             return this_data
