@@ -275,11 +275,12 @@ class AutoRegressiveStrategy:
         # Relevant mostly for stablecoin pairs
         if TICK_A == TICK_B:
             TICK_B = TICK_A + current_strat_obs.tickSpacing
-        elif TICK_A > TICK_B:
-            if limit_amount_0*current_strat_obs.price > limit_amount_1:
-                TICK_B = TICK_A + current_strat_obs.tickSpacing
-            else: 
-                TICK_A = TICK_B - current_strat_obs.tickSpacing
+        # In limit, make sure lower tick is above active tick
+        elif TICK_A == current_strat_obs.price_tick:
+            TICK_A = TICK_A + current_strat_obs.tickSpacing
+        # In limit, make sure upper tick is below active tick
+        elif TICK_B == current_strat_obs.price_tick:
+            TICK_B = TICK_B - current_strat_obs.tickSpacing
 
         liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
