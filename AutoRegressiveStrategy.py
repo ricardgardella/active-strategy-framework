@@ -3,10 +3,8 @@ import numpy as np
 import math
 import arch
 import UNI_v3_funcs
-import logging
 import ActiveStrategyFramework
 import scipy
-# logging.basicConfig(filename='ar_strategy.log',level=logging.INFO)
 
 class AutoRegressiveStrategy:
     def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5):
@@ -201,14 +199,6 @@ class AutoRegressiveStrategy:
         # Store each token amount supplied to pool
         total_token_0_amount = current_strat_obs.liquidity_in_0
         total_token_1_amount = current_strat_obs.liquidity_in_1
-        
-#         logging.info('BASE POSITION: lower {} | upper {} | current {} | target {} \n return forecast {} | sd forecast {} | reset reason {} | time {}'.format(base_range_lower,
-#                                                                                                               base_range_upper,current_strat_obs.price,
-#                                                                                                               target_price,
-#                                                                                                               model_forecast['return_forecast'],
-#                                                                                                               model_forecast['sd_forecast'],
-#                                                                                                               current_strat_obs.reset_reason,
-#                                                                                                               current_strat_obs.time))
                                     
         # Lower Range
         if base_range_lower > 0.0:
@@ -217,7 +207,7 @@ class AutoRegressiveStrategy:
         else:
             # If lower end of base range is negative, fix at 0.0
             base_range_lower   = 0.0
-            TICK_A             = round(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
+            TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
 
         # Upper Range
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001))
@@ -232,8 +222,6 @@ class AutoRegressiveStrategy:
         
         base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,liquidity_placed_base\
                                                                  ,current_strat_obs.decimals_0,current_strat_obs.decimals_1)
-        
-#         logging.info('base 0: {} | base 1: {}'.format(base_0_amount,base_1_amount))
         
         total_token_0_amount  -= base_0_amount
         total_token_1_amount  -= base_1_amount
@@ -277,13 +265,11 @@ class AutoRegressiveStrategy:
             TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*limit_range_lower,1.0001))
             TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         else:
-            TICK_A             = round(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
+            TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
                 
 
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
-        
-#         logging.info('LIMIT POSITION: lower {} | upper {}'.format(limit_range_lower,limit_range_upper))
         
         # Make sure Tick A < Tick B. If not make one tick
         # Relevant mostly for stablecoin pairs
@@ -299,9 +285,7 @@ class AutoRegressiveStrategy:
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
         limit_0_amount,limit_1_amount =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,\
                                                                      liquidity_placed_limit,current_strat_obs.decimals_0,current_strat_obs.decimals_1)  
-        
-                     
-#         logging.info('limit 0: {} | limit 1: {}'.format(limit_0_amount,limit_1_amount))
+
 
         limit_liq_range =       {'price'              : current_strat_obs.price,
                                  'target_price'       : target_price,
