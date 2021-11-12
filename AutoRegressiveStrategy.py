@@ -217,10 +217,10 @@ class AutoRegressiveStrategy:
         if TICK_A == TICK_B:
             TICK_B = TICK_A + current_strat_obs.tickSpacing
         
-        liquidity_placed_base   = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
+        liquidity_placed_base   = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
                                                                        current_strat_obs.liquidity_in_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
         
-        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,liquidity_placed_base\
+        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,liquidity_placed_base\
                                                                  ,current_strat_obs.decimals_0,current_strat_obs.decimals_1)
         
         total_token_0_amount  -= base_0_amount
@@ -282,9 +282,9 @@ class AutoRegressiveStrategy:
         elif TICK_B == current_strat_obs.price_tick:
             TICK_B = TICK_B - current_strat_obs.tickSpacing
 
-        liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick,TICK_A,TICK_B, \
+        liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
-        limit_0_amount,limit_1_amount =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick,TICK_A,TICK_B,\
+        limit_0_amount,limit_1_amount =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,\
                                                                      liquidity_placed_limit,current_strat_obs.decimals_0,current_strat_obs.decimals_1)  
 
 
