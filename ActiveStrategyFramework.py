@@ -47,6 +47,7 @@ class StrategyObservation:
         
         TICK_P_PRE                       = int(math.log(self.decimal_adjustment*self.price,1.0001))        
         self.price_tick                  = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
+        self.price_tick_current          = math.floor(TICK_P_PRE)
             
         ######################################
         # 2. Execute the strategy
