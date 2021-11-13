@@ -67,7 +67,7 @@ class StrategyObservation:
                 self.liquidity_ranges[i]['time'] = self.time
                 
                 if self.simulate_strat:
-                    amount_0, amount_1 = UNI_v3_funcs.get_amounts(self.price_tick,
+                    amount_0, amount_1 = UNI_v3_funcs.get_amounts(self.price_tick_current,
                                                                  self.liquidity_ranges[i]['lower_bin_tick'],
                                                                  self.liquidity_ranges[i]['upper_bin_tick'],
                                                                  self.liquidity_ranges[i]['position_liquidity'],
@@ -292,11 +292,11 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
                         'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),
                         'impermanent_loss'     : ((strategy_last_obs['value_position_usd'] - strategy_last_obs['value_hold_usd']) / strategy_last_obs['value_hold_usd'])[0],
                         'mean_base_position'   : (data_usd['base_position_value']/ \
-                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),
-        
+                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),        
                         'median_base_position' : (data_usd['base_position_value']/ \
                                                   (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median(),
-        
+                        'mean_base_width'      : ((data_usd['base_range_upper']-data_usd['base_range_lower'])/data_usd['price_at_reset']).mean(),
+                        'median_base_width'    : ((data_usd['base_range_upper']-data_usd['base_range_lower'])/data_usd['price_at_reset']).median(),        
                         'final_value'          : data_usd['value_position_usd'].iloc[-1]
                     }
     
@@ -310,7 +310,7 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
     fig_strategy = go.Figure()
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['base_range_lower'],
+        y=data_strategy['base_range_lower'],
         fill=None,
         mode='lines',
         showlegend = False,
@@ -318,14 +318,14 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
         ))
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['base_range_upper'],
+        y=data_strategy['base_range_upper'],
         name='Base Position',
         fill='tonexty', # fill area between trace0 and trace1
         mode='lines', line_color=base_color))
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['limit_range_lower'],
+        y=data_strategy['limit_range_lower'],
         fill=None,
         mode='lines',
         showlegend = False,
@@ -333,26 +333,26 @@ def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['limit_range_upper'],
+        y=data_strategy['limit_range_upper'],
         name='Base + Limit Position',
         fill='tonexty', # fill area between trace0 and trace1
         mode='lines', line_color='#6f6f6f',))
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['reset_range_lower'],
+        y=data_strategy['reset_range_lower'],
         name='Strategy Reset Bound',
         line=dict(width=2,dash='dot',color='black')))
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['reset_range_upper'],
+        y=data_strategy['reset_range_upper'],
         showlegend = False,
         line=dict(width=2,dash='dot',color='black',)))
 
     fig_strategy.add_trace(go.Scatter(
         x=data_strategy['time'], 
-        y=1/data_strategy['price'],
+        y=data_strategy['price'],
         name='Price',
         line=dict(width=2,color='black')))
 

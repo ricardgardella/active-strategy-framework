@@ -206,7 +206,7 @@ class AutoRegressiveStrategy:
             TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         else:
             # If lower end of base range is negative, fix at 0.0
-            base_range_lower   = 0.0
+            base_range_lower   = 2**-128
             TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
 
         # Upper Range
@@ -248,9 +248,9 @@ class AutoRegressiveStrategy:
         
         limit_amount_0 = total_token_0_amount
         limit_amount_1 = total_token_1_amount
-        
+        token_0_limit  = limit_amount_0*current_strat_obs.price > limit_amount_1
         # Place singe sided highest value
-        if limit_amount_0*current_strat_obs.price > limit_amount_1:        
+        if token_0_limit:        
             # Place Token 0
             limit_amount_1 = 0.0
             limit_range_lower = current_strat_obs.price
@@ -271,16 +271,19 @@ class AutoRegressiveStrategy:
         TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
         TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         
-        # Make sure Tick A < Tick B. If not make one tick
-        # Relevant mostly for stablecoin pairs
-        if TICK_A == TICK_B:
-            TICK_B = TICK_A + current_strat_obs.tickSpacing
         # In limit, make sure lower tick is above active tick
-        elif TICK_A == current_strat_obs.price_tick:
+        if TICK_A == current_strat_obs.price_tick:
             TICK_A = TICK_A + current_strat_obs.tickSpacing
         # In limit, make sure upper tick is below active tick
         elif TICK_B == current_strat_obs.price_tick:
             TICK_B = TICK_B - current_strat_obs.tickSpacing
+        
+        # Make sure Tick A < Tick B. If not make one tick    
+        if TICK_A == TICK_B:
+            if token_0_limit:
+                TICK_A += current_strat_obs.tickSpacing
+            else:
+                TICK_B -= current_strat_obs.tickSpacing
 
         liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
@@ -346,6 +349,7 @@ class AutoRegressiveStrategy:
             this_data['limit_range_upper']      = strategy_observation.liquidity_ranges[1]['upper_bin_price']
             this_data['reset_range_lower']      = strategy_observation.strategy_info['reset_range_lower']
             this_data['reset_range_upper']      = strategy_observation.strategy_info['reset_range_upper']
+            this_data['price_at_reset']         = strategy_observation.liquidity_ranges[0]['price']
             
             # Fee Varaibles
             this_data['token_0_fees']                 = strategy_observation.token_0_fees 
