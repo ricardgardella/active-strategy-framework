@@ -78,6 +78,13 @@ class AutoRegressiveStrategy:
         
     def check_strategy(self,current_strat_obs,strategy_info):
         
+        model_forecast      = None
+        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1'] / current_strat_obs.price
+        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1'] / current_strat_obs.price
+        
+        if not 'last_vol_check' in strategy_info:
+            strategy_info['last_vol_check'] = current_strat_obs.time
+        
         #####################################
         #
         # This strategy rebalances in three scenarios:
@@ -85,11 +92,7 @@ class AutoRegressiveStrategy:
         # 2. Volatility has dropped           (volatility_reset_ratio)
         # 3. Tokens outside of pool greater than 5% of value of LP position
         #
-        #####################################
-        
-        model_forecast      = None
-        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1'] / current_strat_obs.price
-        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1'] / current_strat_obs.price
+        #####################################        
         
         #######################
         # 1. Leave Reset Range
@@ -105,12 +108,13 @@ class AutoRegressiveStrategy:
         # Check every hour (60  minutes)
         
         ar_check_frequency = 60        
-        time_since_reset =  current_strat_obs.time - current_strat_obs.liquidity_ranges[0]['reset_time']
+        time_since_reset   = current_strat_obs.time - strategy_info['last_vol_check']
         
         VOL_REBALANCE    = False
-        if divmod(time_since_reset.total_seconds(), 60)[0] % ar_check_frequency == 0:
-
-            model_forecast = self.generate_model_forecast(current_strat_obs.time)
+        if divmod(time_since_reset.total_seconds(), 60)[0] > ar_check_frequency:
+            
+            strategy_info['last_vol_check'] = current_strat_obs.time
+            model_forecast                  = self.generate_model_forecast(current_strat_obs.time)
         
             if model_forecast['sd_forecast']/current_strat_obs.liquidity_ranges[0]['volatility'] <= self.volatility_reset_ratio:
                 VOL_REBALANCE = True
@@ -155,13 +159,13 @@ class AutoRegressiveStrategy:
             current_strat_obs.remove_liquidity()
             
             # Reset liquidity            
-            liq_range,strategy_info = self.set_liquidity_ranges(current_strat_obs,model_forecast)
+            liq_range,strategy_info = self.set_liquidity_ranges(current_strat_obs,strategy_info,model_forecast)
             return liq_range,strategy_info        
         else:
             return current_strat_obs.liquidity_ranges,strategy_info
             
             
-    def set_liquidity_ranges(self,current_strat_obs,model_forecast = None):
+    def set_liquidity_ranges(self,current_strat_obs,strategy_info = None,model_forecast = None):
         
         ###########################################################
         # STEP 1: Do calculations required to determine base liquidity bounds
@@ -170,6 +174,9 @@ class AutoRegressiveStrategy:
         # Fit model
         if model_forecast is None:
             model_forecast = self.generate_model_forecast(current_strat_obs.time)
+            
+        if strategy_info is None:
+            strategy_info = dict()
             
         # Limit return prediction to a 25% change
         if np.abs(model_forecast['return_forecast']) > .25:
@@ -182,7 +189,6 @@ class AutoRegressiveStrategy:
         base_range_upper           = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.alpha_param*model_forecast['sd_forecast'])
         
         # Set the reset range
-        strategy_info = dict()
         strategy_info['reset_range_lower'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] - self.tau_param*self.alpha_param*model_forecast['sd_forecast'])
         strategy_info['reset_range_upper'] = current_strat_obs.price * (1 + model_forecast['return_forecast'] + self.tau_param*self.alpha_param*model_forecast['sd_forecast'])
         
