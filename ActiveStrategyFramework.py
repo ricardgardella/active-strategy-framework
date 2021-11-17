@@ -56,7 +56,7 @@ class StrategyObservation:
         #    If swaps data has been fed in, it will be used to estimate fee income (for backtesting simulations)
         #    Otherwise just the ranges will be updated (for a live environment)
         ######################################
-        if liquidity_ranges is None and strategy_info is None:
+        if liquidity_ranges is None:
             self.liquidity_ranges,self.strategy_info  = strategy_in.set_liquidity_ranges(self)
                                  
         else: 
@@ -265,7 +265,7 @@ def aggregate_price_data(data,frequency):
     price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()
     return price_data_aggregated
 
-def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
+def analyze_strategy(data_usd,frequency = 'M'):
 
     
     if   frequency == 'M':
@@ -278,7 +278,9 @@ def analyze_strategy(data_usd,initial_position_value,frequency = 'M'):
     days_strategy           = (data_usd['time'].max()-data_usd['time'].min()).days    
     strategy_last_obs       = data_usd.tail(1)
     strategy_last_obs       = strategy_last_obs.reset_index(drop=True)
+    initial_position_value  = data_usd.iloc[0]['value_hold_usd']
     net_apr                 = float((strategy_last_obs['value_position_usd']/initial_position_value - 1) * 365 / days_strategy)
+    
 
     summary_strat = {
                         'days_strategy'        : days_strategy,
@@ -440,3 +442,93 @@ def plot_asset_composition(data_strategy,token_0_name,token_1_name):
     fig_composition.show(renderer="png")
     
     return fig_composition
+
+def plot_position_return_decomposition(data_strategy):
+    import plotly.graph_objects as go
+    INITIAL_POSITION_VALUE = data_strategy.iloc[0]['value_position_usd']
+    CHART_SIZE = 300
+
+    fig_income = go.Figure()
+    fig_income.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['cum_fees_usd']/INITIAL_POSITION_VALUE,
+        fill=None,
+        mode='lines',
+        line_color='blue',
+        name='Accumulated Fees',
+        ))
+
+    fig_income.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=(data_strategy['value_hold_usd']-data_strategy['value_position_usd'])/INITIAL_POSITION_VALUE,
+        fill=None,
+        mode='lines',
+        line_color='black',
+        name='Impermanent Loss',
+        ))
+    
+    fig_income.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=(data_strategy['value_hold_usd'])/INITIAL_POSITION_VALUE - 1,
+        fill=None,
+        mode='lines',
+        line_color='green',
+        name='Value Hold',
+        ))
+
+    fig_income.add_trace(go.Scatter(
+        x=data_strategy['time'], 
+        y=data_strategy['value_position_usd']/INITIAL_POSITION_VALUE-1,
+        fill=None,
+        mode='lines',
+        line_color='#ff0000',
+        name='Net Position Value'
+        ))
+
+    fig_income.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Position Value Change Decomposition',
+        xaxis_title="Date",
+        yaxis_title="Position %",
+        legend_title='Token',
+        yaxis=dict(tickformat = "%"),
+    )
+
+    fig_income.show(renderer="png")
+    
+    return fig_income
+
+
+def plot_position_composition(data_strategy):
+    import plotly.graph_objects as go
+    CHART_SIZE = 300
+    fig_position_composition = go.Figure()
+    fig_position_composition.add_trace(go.Scatter(
+        x=data_strategy['time'], y=data_strategy['base_position_value'],
+        mode='lines',
+        name='Base Position',
+        line=dict(width=0.5, color='#ff0000'),
+        stackgroup='one', # define stack group
+    #     groupnorm='percent'
+    ))
+    fig_position_composition.add_trace(go.Scatter(
+        x=data_strategy['time'], y=data_strategy['limit_position_value'],
+        mode='lines',
+        name='Limit Position',
+        line=dict(width=0.5, color='#6f6f6f'),
+        stackgroup='one'
+    ))
+
+    fig_position_composition.update_layout(
+        margin=dict(l=20, r=20, t=40, b=20),
+        height= CHART_SIZE,
+        title = 'Base / Limit Values',
+        xaxis_title="Date",
+        yaxis_title="Cumulative Value",
+        legend_title='Value'
+    )
+
+    fig_position_composition.show(renderer="png")
+
+    return fig_position_composition

@@ -208,6 +208,7 @@ class ResetStrategy:
             this_data['limit_range_upper']      = strategy_observation.liquidity_ranges[1]['upper_bin_price']
             this_data['reset_range_lower']      = strategy_observation.strategy_info['reset_range_lower']
             this_data['reset_range_upper']      = strategy_observation.strategy_info['reset_range_upper']
+            this_data['price_at_reset']         = strategy_observation.liquidity_ranges[0]['price']
             
             # Fee Varaibles
             this_data['token_0_fees']           = strategy_observation.token_0_fees 
@@ -227,8 +228,8 @@ class ResetStrategy:
                 
             this_data['token_0_allocated']      = total_token_0
             this_data['token_1_allocated']      = total_token_1
-            this_data['token_0_total']          = total_token_0 + strategy_observation.token_0_left_over + strategy_observation.token_0_fees_accum
-            this_data['token_1_total']          = total_token_1 + strategy_observation.token_1_left_over + strategy_observation.token_1_fees_accum
+            this_data['token_0_total']          = total_token_0 + strategy_observation.token_0_left_over + strategy_observation.token_0_fees_uncollected
+            this_data['token_1_total']          = total_token_1 + strategy_observation.token_1_left_over + strategy_observation.token_1_fees_uncollected
 
             # Value Variables
             this_data['value_position']         = this_data['token_0_total'] + this_data['token_1_total']         / this_data['price']
