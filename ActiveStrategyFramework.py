@@ -464,7 +464,7 @@ def plot_position_return_decomposition(data_strategy):
         fill=None,
         mode='lines',
         line_color='black',
-        name='Impermanent Loss',
+        name='Value Hold - Position',
         ))
     
     fig_income.add_trace(go.Scatter(
