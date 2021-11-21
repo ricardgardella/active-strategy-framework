@@ -44,7 +44,6 @@ class AutoRegressiveStrategy:
             data_filled['price_return']  = data_filled['quotePrice'].pct_change()
             data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['price_return']))
             data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
-            data_filled                  = data_filled['quotePrice']
             return data_filled
         
         
