@@ -35,14 +35,13 @@ class AutoRegressiveStrategy:
     #####################################
     
     def clean_data_for_garch(self,data_in):
-            percentile_remove            = .01
+            percentile_remove            = .005
             z_score_cutoff               = 3
             data_filled                  = ActiveStrategyFramework.fill_time(data_in)
             top_ptile                    = np.nanquantile(data_filled.quotePrice,1-percentile_remove)
             bot_ptile                    = np.nanquantile(data_filled.quotePrice,percentile_remove)
             data_filled                  = data_filled[(data_filled.quotePrice < top_ptile) & (data_filled.quotePrice  > bot_ptile) ]
             data_filled['price_return']  = data_filled['quotePrice'].pct_change()
-            data_filled['price_return']  = data_filled.quotePrice.pct_change()
             data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['price_return']))
             data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
             data_filled                  = data_filled['quotePrice']
