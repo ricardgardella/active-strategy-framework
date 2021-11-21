@@ -42,6 +42,7 @@ class AutoRegressiveStrategy:
             bot_ptile                    = np.nanquantile(data_filled.quotePrice,percentile_remove)
             data_filled                  = data_filled[(data_filled.quotePrice < top_ptile) & (data_filled.quotePrice  > bot_ptile) ]
             data_filled['price_return']  = data_filled['quotePrice'].pct_change()
+            data_filled                  = data_filled.dropna(axis=0,subset=['price_return'])
             data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['price_return']))
             data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
             return data_filled
@@ -52,7 +53,7 @@ class AutoRegressiveStrategy:
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
             current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
             current_data['price_return']  = current_data['quotePrice'].pct_change()
-            current_data                  = current_data.dropna(axis=0)
+            current_data                  = current_data.dropna(axis=0,subset=['price_return'])
             
             ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('90 days')))].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
