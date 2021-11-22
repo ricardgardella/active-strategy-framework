@@ -44,6 +44,7 @@ class StrategyObservation:
         self.token_0_fees                = 0.0
         self.token_1_fees                = 0.0
         self.simulate_strat              = simulate_strat
+        self.strategy_info               = copy.deepcopy(strategy_info)
         
         TICK_P_PRE                       = int(math.log(self.decimal_adjustment*self.price,1.0001))        
         self.price_tick                  = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
@@ -84,7 +85,7 @@ class StrategyObservation:
                 self.token_1_fees                   = fees_token_1
                 
             # Check strategy and potentially reset the ranges
-            self.liquidity_ranges,self.strategy_info     = strategy_in.check_strategy(self,strategy_info)
+            self.liquidity_ranges,self.strategy_info     = strategy_in.check_strategy(self)
                 
     ########################################################
     # Accrue earned fees (not supply into LP yet)
