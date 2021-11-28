@@ -3,6 +3,7 @@ import numpy as np
 import math
 from statsmodels.distributions.empirical_distribution import ECDF, monotone_fn_inverter
 import UNI_v3_funcs
+import copy
 
 class ResetStrategy:
     def __init__(self,model_data,alpha_param,tau_param,limit_parameter):
@@ -19,7 +20,7 @@ class ResetStrategy:
     # If it is, remove the liquidity and set new ranges
     #####################################
         
-    def check_strategy(self,current_strat_obs,strategy_info):
+    def check_strategy(self,current_strat_obs):
         
         #####################################
         #
@@ -30,8 +31,8 @@ class ResetStrategy:
         #
         #####################################
         
-        LEFT_RANGE_LOW      = current_strat_obs.price < strategy_info['reset_range_lower']
-        LEFT_RANGE_HIGH     = current_strat_obs.price > strategy_info['reset_range_upper']
+        LEFT_RANGE_LOW      = current_strat_obs.price < current_strat_obs.strategy_info['reset_range_lower']
+        LEFT_RANGE_HIGH     = current_strat_obs.price > current_strat_obs.strategy_info['reset_range_upper']
         LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1']*current_strat_obs.price
         BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1']*current_strat_obs.price
         model_forecast      = None
@@ -66,7 +67,7 @@ class ResetStrategy:
             liq_range,strategy_info = self.set_liquidity_ranges(current_strat_obs)
             return liq_range,strategy_info        
         else:
-            return current_strat_obs.liquidity_ranges,strategy_info
+            return current_strat_obs.liquidity_ranges,current_strat_obs.strategy_info
             
             
     def set_liquidity_ranges(self,current_strat_obs):
@@ -76,9 +77,13 @@ class ResetStrategy:
         ###########################################################
                          
             
-        strategy_info = dict()
-        strategy_info['reset_range_lower']     = (1 + self.inverse_ecdf((1 -      self.tau_param)/2))    * current_strat_obs.price
-        strategy_info['reset_range_upper']     = (1 + self.inverse_ecdf( 1 - (1 - self.tau_param)/2))    * current_strat_obs.price
+        if current_strat_obs.strategy_info is None:
+            strategy_info_here = dict()
+        else:
+            strategy_info_here = copy.deepcopy(current_strat_obs.strategy_info)
+            
+        strategy_info_here['reset_range_lower']     = (1 + self.inverse_ecdf((1 -      self.tau_param)/2))    * current_strat_obs.price
+        strategy_info_here['reset_range_upper']     = (1 + self.inverse_ecdf( 1 - (1 - self.tau_param)/2))    * current_strat_obs.price
 
         # Set the base range
         base_range_lower      = (1 + self.inverse_ecdf((1 -      self.alpha_param)/2))  * current_strat_obs.price
@@ -186,7 +191,7 @@ class ResetStrategy:
         current_strat_obs.liquidity_in_0 = 0.0
         current_strat_obs.liquidity_in_1 = 0.0
         
-        return save_ranges,strategy_info
+        return save_ranges,strategy_info_here
         
         
     ########################################################
