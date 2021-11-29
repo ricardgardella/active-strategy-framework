@@ -56,7 +56,7 @@ class AutoRegressiveStrategy:
             current_data['price_return']  = current_data['quotePrice'].pct_change()
             current_data                  = current_data.dropna(axis=0,subset=['price_return'])
             
-            ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('90 days')))].to_numpy(), lags=1,rescale=True)
+            ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('180 days')))].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
             res                  = ar_model.fit(update_freq=0, disp="off")
