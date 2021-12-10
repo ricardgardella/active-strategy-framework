@@ -24,29 +24,31 @@ class AutoRegressiveStrategy:
         if   data_frequency == 'D':
             self.annualization_factor = 365**.5
             self.resample_option      = '1D'
+            self.window_size          = 3
         elif data_frequency == 'H':
             self.annualization_factor = (24*365)**.5
             self.resample_option      = '1H'
+            self.window_size          = 24*3
         elif data_frequency == 'M':
             self.annualization_factor = (60*24*365)**.5
             self.resample_option      = '1 min'
+            self.window_size          = 60*24*7
         
     #####################################
     # Estimate AR model at current timepoint
     #####################################
     
-    def clean_data_for_garch(data_in):        
+    def clean_data_for_garch(self,data_in):        
             z_score_cutoff               = 3
-            window_size                  = 60*24*7
             data_filled                  = ActiveStrategyFramework.fill_time(data_in)
 
             # Filter according to Median Absolute Deviation
             # 1. Generate rolling median
-            data_filled_rolling              = data_filled.quotePrice.rolling(window=window_size) 
+            data_filled_rolling              = data_filled.quotePrice.rolling(window=self.window_size) 
             data_filled['roll_median']       = data_filled_rolling.median()
             # 2. Compute rolling absolute deviation of current price from median under Gaussian
             roll_dev                         = np.abs(data_filled.quotePrice - data_filled.roll_median)
-            data_filled['median_abs_dev']    = 1.4826*roll_dev.rolling(window=window_size).median()
+            data_filled['median_abs_dev']    = 1.4826*roll_dev.rolling(window=self.window_size).median()
             # 3. Compute modified z-score
             data_filled['mod_z_score']       = np.abs(data_filled.quotePrice - data_filled.roll_median)/data_filled.median_abs_dev
             # 4. Drop values outsize of z-score-cutoff
