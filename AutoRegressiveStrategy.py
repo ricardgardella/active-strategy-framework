@@ -10,13 +10,6 @@ import copy
 class AutoRegressiveStrategy:
     def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5):
         
-        self.model_data             = self.clean_data_for_garch(model_data)
-        self.alpha_param            = alpha_param
-        self.tau_param              = tau_param
-        self.volatility_reset_ratio = volatility_reset_ratio
-        self.data_frequency         = data_frequency
-        self.tokens_outside_reset   = tokens_outside_reset
-        self.default_width          = default_width
         
         # Allow for different input data frequencies, always get 1 day ahead forecast
         # Model data frequency is expressed in minutes
@@ -34,6 +27,17 @@ class AutoRegressiveStrategy:
             self.resample_option      = '1 min'
             self.window_size          = 60*24*7
         
+        
+        self.model_data             = self.clean_data_for_garch(model_data)
+        self.alpha_param            = alpha_param
+        self.tau_param              = tau_param
+        self.volatility_reset_ratio = volatility_reset_ratio
+        self.data_frequency         = data_frequency
+        self.tokens_outside_reset   = tokens_outside_reset
+        self.default_width          = default_width
+        
+
+        
     #####################################
     # Estimate AR model at current timepoint
     #####################################
@@ -46,12 +50,15 @@ class AutoRegressiveStrategy:
             # 1. Generate rolling median
             data_filled_rolling              = data_filled.quotePrice.rolling(window=self.window_size) 
             data_filled['roll_median']       = data_filled_rolling.median()
+            
             # 2. Compute rolling absolute deviation of current price from median under Gaussian
             roll_dev                         = np.abs(data_filled.quotePrice - data_filled.roll_median)
             data_filled['median_abs_dev']    = 1.4826*roll_dev.rolling(window=self.window_size).median()
+            
             # 3. Compute modified z-score
             data_filled['mod_z_score']       = np.abs(data_filled.quotePrice - data_filled.roll_median)/data_filled.median_abs_dev
-            # 4. Drop values outsize of z-score-cutoff
+            
+            # 4. Drop values outsize of z-score-cutoff and compute return
             data_filled                      = data_filled[data_filled.mod_z_score < z_score_cutoff]
             data_filled['price_return']      = data_filled['quotePrice'].pct_change()
 
