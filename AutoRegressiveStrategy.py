@@ -35,25 +35,30 @@ class AutoRegressiveStrategy:
     # Estimate AR model at current timepoint
     #####################################
     
-    def clean_data_for_garch(self,data_in):
-            percentile_remove            = .005
+    def clean_data_for_garch(data_in):        
             z_score_cutoff               = 3
+            window_size                  = 60*24*7
             data_filled                  = ActiveStrategyFramework.fill_time(data_in)
-            top_ptile                    = np.nanquantile(data_filled.quotePrice,1-percentile_remove)
-            bot_ptile                    = np.nanquantile(data_filled.quotePrice,percentile_remove)
-            data_filled                  = data_filled[(data_filled.quotePrice < top_ptile) & (data_filled.quotePrice  > bot_ptile) ]
-            data_filled['price_return']  = data_filled['quotePrice'].pct_change()
-            data_filled                  = data_filled.dropna(axis=0,subset=['price_return'])
-            data_filled['z_scores']      = np.abs(scipy.stats.zscore(data_filled['price_return']))
-            data_filled                  = data_filled.drop(data_filled[data_filled.z_scores > z_score_cutoff].index)
+
+            # Filter according to Median Absolute Deviation
+            # 1. Generate rolling median
+            data_filled_rolling              = data_filled.quotePrice.rolling(window=window_size) 
+            data_filled['roll_median']       = data_filled_rolling.median()
+            # 2. Compute rolling absolute deviation of current price from median under Gaussian
+            roll_dev                         = np.abs(data_filled.quotePrice - data_filled.roll_median)
+            data_filled['median_abs_dev']    = 1.4826*roll_dev.rolling(window=window_size).median()
+            # 3. Compute modified z-score
+            data_filled['mod_z_score']       = np.abs(data_filled.quotePrice - data_filled.roll_median)/data_filled.median_abs_dev
+            # 4. Drop values outsize of z-score-cutoff
+            data_filled                      = data_filled[data_filled.mod_z_score < z_score_cutoff]
+            data_filled['price_return']      = data_filled['quotePrice'].pct_change()
+
             return data_filled
-        
         
     def generate_model_forecast(self,timepoint):
         
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
             current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
-            current_data['price_return']  = current_data['quotePrice'].pct_change()
             current_data                  = current_data.dropna(axis=0,subset=['price_return'])
             
             ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('180 days')))].to_numpy(), lags=1,rescale=True)

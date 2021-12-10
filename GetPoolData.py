@@ -224,6 +224,7 @@ def generate_first_event_payload(event,address):
                           tick
                           amount0
                           amount1
+                          amountUSD
                         }
                       }
                     }'''
