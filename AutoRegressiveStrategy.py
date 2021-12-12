@@ -198,9 +198,9 @@ class AutoRegressiveStrategy:
         else:
             strategy_info_here = copy.deepcopy(current_strat_obs.strategy_info)
             
-        # Limit return prediction to a 25% change
-        if np.abs(model_forecast['return_forecast']) > .25:
-                    model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast'])*.25
+        # Limit return prediction to a 15% change
+        if np.abs(model_forecast['return_forecast']) > .15:
+                    model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast'])*.15
                 
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
 
