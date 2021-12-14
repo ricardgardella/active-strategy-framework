@@ -35,7 +35,7 @@ class AutoRegressiveStrategy:
         self.data_frequency         = data_frequency
         self.tokens_outside_reset   = tokens_outside_reset
         self.default_width          = default_width
-        
+        self.return_forecast_cutoff = 0.15
 
         
     #####################################
@@ -199,8 +199,12 @@ class AutoRegressiveStrategy:
             strategy_info_here = copy.deepcopy(current_strat_obs.strategy_info)
             
         # Limit return prediction to a 15% change
-        if np.abs(model_forecast['return_forecast']) > .15:
-                    model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast'])*.15
+        if np.abs(model_forecast['return_forecast']) > self.return_forecast_cutoff:
+                    model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast']) * self.return_forecast_cutoff
+                
+        # If error in volatility computtion use last
+        if np.isnan(model_forecast['sd_forecast']):
+            model_forecast['sd_forecast'] = current_strat_obs.liquidity_ranges[0]['volatility']
                 
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
 
