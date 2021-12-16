@@ -107,7 +107,7 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     if DOWNLOAD_DATA:        
         if RATE_LIMIT:
             # Break out into months to rate limit
-            periods_to_request = pd.date_range(date_begin,date_end,freq="3D").strftime("%Y-%m-%d").tolist()
+            periods_to_request = pd.date_range(date_begin,date_end,freq="D").strftime("%Y-%m-%d").tolist()
                 
             for i in range(len(periods_to_request)-1):             
                 request.append(run_query(generate_price_payload(token_0_address,token_1_address,periods_to_request[i],periods_to_request[i+1],exchange_to_query),api_token))
@@ -149,7 +149,7 @@ def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file
     if DOWNLOAD_DATA:        
         if RATE_LIMIT:
             # Break out into months to rate limit
-            periods_to_request = pd.date_range(date_begin,date_end,freq="3D").strftime("%Y-%m-%d").tolist()
+            periods_to_request = pd.date_range(date_begin,date_end,freq="D").strftime("%Y-%m-%d").tolist()
                 
             for i in range(len(periods_to_request)-1):             
                 request.append(run_query(generate_usd_price_payload(token_address,periods_to_request[i],periods_to_request[i+1]),api_token))
