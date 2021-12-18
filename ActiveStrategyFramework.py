@@ -46,8 +46,8 @@ class StrategyObservation:
         self.simulate_strat              = simulate_strat
         self.strategy_info               = copy.deepcopy(strategy_info)
         
-        TICK_P_PRE                       = int(math.log(self.decimal_adjustment*self.price,1.0001))        
-        self.price_tick                  = round(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
+        TICK_P_PRE                       = math.log(self.decimal_adjustment*self.price,1.0001)
+        self.price_tick                  = math.floor(TICK_P_PRE/self.tickSpacing)*self.tickSpacing
         self.price_tick_current          = math.floor(TICK_P_PRE)
             
         ######################################
