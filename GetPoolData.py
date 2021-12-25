@@ -4,7 +4,7 @@ import requests
 import pickle
 import importlib
 from itertools import compress
-    
+import time
 # Extract all Mint, Burn, and Swap Events
 # From a given pool
 # Returns json requests
@@ -100,22 +100,28 @@ def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DA
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
-def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True,exchange_to_query='Uniswap'):
+def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=False,exchange_to_query='Uniswap'):
 
     request = []
+    max_rows_bitquery = 10000
     
     if DOWNLOAD_DATA:        
-        if RATE_LIMIT:
-            # Break out into months to rate limit
-            periods_to_request = pd.date_range(date_begin,date_end,freq="D").strftime("%Y-%m-%d").tolist()
-                
-            for i in range(len(periods_to_request)-1):             
-                request.append(run_query(generate_price_payload(token_0_address,token_1_address,periods_to_request[i],periods_to_request[i+1],exchange_to_query),api_token))
-            with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
-                pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
-        else:
-            # Otherwise just download the data
-            request.append(run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,exchange_to_query),api_token))
+        # Paginate using limit and an offset
+        offset = 0
+        current_request = run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
+        request.append(current_request)
+        
+        # When a request has less than 10,000 rows we are at the last one
+        while len(current_request['data']['ethereum']['dexTrades']) == max_rows_bitquery:
+            current_request = run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
+            request.append(current_request)
+            offset += max_rows_bitquery
+            if RATE_LIMIT:
+                time.sleep(5)
+
+        with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
+            pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
+
     else:
         with open('./data/'+file_name+'_1min.pkl', 'rb') as input:
             request = pickle.load(input)
@@ -142,22 +148,27 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
 
     return price_data
 
-def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=True):
+def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=False,exchange_to_query='Uniswap'):
 
     request = []
+    max_rows_bitquery = 10000
     
     if DOWNLOAD_DATA:        
-        if RATE_LIMIT:
-            # Break out into months to rate limit
-            periods_to_request = pd.date_range(date_begin,date_end,freq="D").strftime("%Y-%m-%d").tolist()
-                
-            for i in range(len(periods_to_request)-1):             
-                request.append(run_query(generate_usd_price_payload(token_address,periods_to_request[i],periods_to_request[i+1]),api_token))
-            with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
-                pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
-        else:
-            # Otherwise just download the data
-            request.append(run_query(generate_usd_price_payload(token_address,date_begin,date_end),api_token))
+        # Paginate using limit and an offset
+        offset = 0
+        current_request = run_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
+        request.append(current_request)
+        
+        # When a request has less than 10,000 rows we are at the last one
+        while len(current_request['data']['ethereum']['dexTrades']) == max_rows_bitquery:
+            current_request = run_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
+            request.append(current_request)
+            offset += max_rows_bitquery
+            if RATE_LIMIT:
+                time.sleep(5)
+
+        with open('./data/'+file_name+'_1min.pkl', 'wb') as output:
+            pickle.dump(request, output, pickle.HIGHEST_PROTOCOL)
     else:
         with open('./data/'+file_name+'_1min.pkl', 'rb') as input:
             request = pickle.load(input)
@@ -230,11 +241,11 @@ def generate_first_event_payload(event,address):
                     }'''
         return payload
 
-def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,exchange_to_query='Uniswap'):
+def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query='Uniswap'):
     payload =   '''{
                   ethereum(network: ethereum) {
                     dexTrades(
-                      options: {asc: "timeInterval.minute"}
+                      options: {asc: "timeInterval.minute", limit: 10000, offset:'''+str(offset)+'''}
                       date: {between: ["'''+date_begin+'''","'''+date_end+'''"]}
                       exchangeName: {is: "'''+exchange_to_query+'''"}
                       baseCurrency: {is: "'''+token_0_address+'''"}
@@ -263,12 +274,13 @@ def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,e
     return payload
 
 
-def generate_usd_price_payload(token_address,date_begin,date_end):
+def generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query='Uniswap'):
     payload =   '''{
                   ethereum(network: ethereum) {
                     dexTrades(
-                      options: {asc: "timeInterval.minute"}
+                      options: {asc: "timeInterval.minute", limit: 10000, offset:'''+str(offset)+'''}
                       date: {between: ["'''+date_begin+'''","'''+date_end+'''"]}
+                      exchangeName: {is: "'''+exchange_to_query+'''"}
                       any: [{baseCurrency: {is: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"},
                              quoteCurrency:{is: "'''+token_address+'''"}},
                             {baseCurrency: {is: "0xdac17f958d2ee523a2206206994597c13d831ec7"},

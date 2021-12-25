@@ -8,7 +8,7 @@ import scipy
 import copy
 
 class AutoRegressiveStrategy:
-    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5):
+    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5,days_ar_model = 180,return_forecast_cutoff=0.15,z_score_cutoff=3):
         
         
         # Allow for different input data frequencies, always get 1 day ahead forecast
@@ -17,25 +17,25 @@ class AutoRegressiveStrategy:
         if   data_frequency == 'D':
             self.annualization_factor = 365**.5
             self.resample_option      = '1D'
-            self.window_size          = 3
         elif data_frequency == 'H':
             self.annualization_factor = (24*365)**.5
             self.resample_option      = '1H'
-            self.window_size          = 24*3
         elif data_frequency == 'M':
             self.annualization_factor = (60*24*365)**.5
             self.resample_option      = '1 min'
-            self.window_size          = 60*24*7
+            
         
-        
-        self.model_data             = self.clean_data_for_garch(model_data)
         self.alpha_param            = alpha_param
         self.tau_param              = tau_param
         self.volatility_reset_ratio = volatility_reset_ratio
         self.data_frequency         = data_frequency
         self.tokens_outside_reset   = tokens_outside_reset
         self.default_width          = default_width
-        self.return_forecast_cutoff = 0.15
+        self.return_forecast_cutoff = return_forecast_cutoff
+        self.days_ar_model          = days_ar_model
+        self.z_score_cutoff         = z_score_cutoff
+        self.window_size            = 60*24*7
+        self.model_data             = self.clean_data_for_garch(model_data)
 
         
     #####################################
@@ -43,7 +43,6 @@ class AutoRegressiveStrategy:
     #####################################
     
     def clean_data_for_garch(self,data_in):        
-            z_score_cutoff               = 3
             data_filled                  = ActiveStrategyFramework.fill_time(data_in)
 
             # Filter according to Median Absolute Deviation
@@ -59,7 +58,7 @@ class AutoRegressiveStrategy:
             data_filled['mod_z_score']       = np.abs(data_filled.quotePrice - data_filled.roll_median)/data_filled.median_abs_dev
             
             # 4. Drop values outsize of z-score-cutoff and compute return
-            data_filled                      = data_filled[data_filled.mod_z_score < z_score_cutoff]
+            data_filled                      = data_filled[data_filled.mod_z_score < self.z_score_cutoff]
             data_filled['price_return']      = data_filled['quotePrice'].pct_change()
 
             return data_filled
@@ -67,26 +66,21 @@ class AutoRegressiveStrategy:
     def generate_model_forecast(self,timepoint):
         
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
-            current_data                  = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
-            current_data                  = current_data.dropna(axis=0,subset=['price_return'])
+            current_data         = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
+            current_data         = current_data.dropna(axis=0,subset=['price_return'])
             
-            ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta('180 days')))].to_numpy(), lags=1,rescale=True)
+            ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta(str(self.days_ar_model)+' days')))].to_numpy(), lags=1,rescale=True)
             ar_model.volatility  = arch.univariate.GARCH(p=1,q=1)
             
             res                  = ar_model.fit(update_freq=0, disp="off")
             scale                = res.scale
 
             forecasts            = res.forecast(horizon=1, reindex=False)
-            
-            var_forecast         = forecasts.variance.to_numpy()[0][-1]
 
             return_forecast      = forecasts.mean.to_numpy()[0][-1] / scale
-            
-            sd_forecast          = self.annualization_factor*(var_forecast/np.power(scale,2))**(0.5)
 
             result_dict          = {'return_forecast': return_forecast,
-                                    'sd_forecast'    : sd_forecast}
-            
+                                    'sd_forecast'    : res.conditional_volatility[-1]}            
             return result_dict
         
     #####################################
@@ -232,16 +226,17 @@ class AutoRegressiveStrategy:
                                     
         # Lower Range
         if base_range_lower > 0.0:
-            TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001))
-            TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+            TICK_A_PRE         = math.log(current_strat_obs.decimal_adjustment*base_range_lower,1.0001)
+            TICK_A             = int(math.floor(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         else:
             # If lower end of base range is negative, fix at 0.0
             base_range_lower   = 2**-128
             TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
 
         # Upper Range
-        TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001))
-        TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        TICK_B_PRE        = math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001)
+        TICK_B            = int(math.floor(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        
         
         # Make sure Tick A < Tick B. If not make one tick
         if TICK_A == TICK_B:
@@ -292,14 +287,14 @@ class AutoRegressiveStrategy:
             limit_range_upper = current_strat_obs.price
             
         if limit_range_lower > 0.0:
-            TICK_A_PRE         = int(math.log(current_strat_obs.decimal_adjustment*limit_range_lower,1.0001))
-            TICK_A             = int(round(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+            TICK_A_PRE         = math.log(current_strat_obs.decimal_adjustment*limit_range_lower,1.0001)
+            TICK_A             = int(math.floor(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         else:
             TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
                 
 
-        TICK_B_PRE        = int(math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001))
-        TICK_B            = int(round(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
+        TICK_B_PRE        = math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001)
+        TICK_B            = int(math.floor(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         
         # In limit, make sure lower tick is above active tick
         if TICK_A == current_strat_obs.price_tick:
