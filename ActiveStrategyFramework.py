@@ -54,8 +54,8 @@ class StrategyObservation:
         # 2. Execute the strategy
         #    If this is the first observation, need to generate ranges 
         #    Otherwise, check if a rebalance is required and execute.
-        #    If swaps data has been fed in, it will be used to estimate fee income (for backtesting simulations)
-        #    Otherwise just the ranges will be updated (for a live environment)
+        #        If swaps data has been fed in, it will be used to estimate fee income (for backtesting simulations)
+        #        If no swap data is fed in (for a live environment) only ranges will be updated 
         ######################################
         if liquidity_ranges is None:
             self.liquidity_ranges,self.strategy_info  = strategy_in.set_liquidity_ranges(self)
