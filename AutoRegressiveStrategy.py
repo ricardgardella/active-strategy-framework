@@ -8,7 +8,7 @@ import scipy
 import copy
 
 class AutoRegressiveStrategy:
-    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5,days_ar_model = 180,return_forecast_cutoff=0.15,z_score_cutoff=3):
+    def __init__(self,model_data,alpha_param,tau_param,volatility_reset_ratio,tokens_outside_reset = .05,data_frequency='D',default_width = .5,days_ar_model = 180,return_forecast_cutoff=0.15,z_score_cutoff=5):
         
         
         # Allow for different input data frequencies, always get 1 day ahead forecast
@@ -34,7 +34,7 @@ class AutoRegressiveStrategy:
         self.return_forecast_cutoff = return_forecast_cutoff
         self.days_ar_model          = days_ar_model
         self.z_score_cutoff         = z_score_cutoff
-        self.window_size            = 60*24*7
+        self.window_size            = 60*24*30
         self.model_data             = self.clean_data_for_garch(model_data)
 
         
@@ -54,19 +54,21 @@ class AutoRegressiveStrategy:
             roll_dev                         = np.abs(data_filled.quotePrice - data_filled.roll_median)
             data_filled['median_abs_dev']    = 1.4826*roll_dev.rolling(window=self.window_size).median()
             
-            # 3. Compute modified z-score
-            data_filled['mod_z_score']       = np.abs(data_filled.quotePrice - data_filled.roll_median)/data_filled.median_abs_dev
-            
-            # 4. Drop values outsize of z-score-cutoff and compute return
-            data_filled                      = data_filled[data_filled.mod_z_score < self.z_score_cutoff]
-            data_filled['price_return']      = data_filled['quotePrice'].pct_change()
+            # 3. Identify outliers using MAD
+            outlier_indices                = np.abs(data_filled.quotePrice - data_filled.roll_median) >= self.z_score_cutoff*data_filled['median_abs_dev']
 
+            # impute
+            #data_filled['quotePrice']      = np.where(outlier_indices.values == 0,  data_filled['quotePrice'].values,data_filled['roll_median'].values)
+
+            # drop
+            data_filled = data_filled[~outlier_indices]
             return data_filled
         
     def generate_model_forecast(self,timepoint):
         
             # Compute returns with data_frequency frequency starting at the current timepoint and looking backwards
-            current_data         = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()            
+            current_data                   = self.model_data.loc[:timepoint].resample(self.resample_option,closed='right',label='right',origin=timepoint).last()      
+            current_data['price_return']   = current_data['quotePrice'].pct_change()
             current_data         = current_data.dropna(axis=0,subset=['price_return'])
             
             ar_model             = arch.univariate.ARX(current_data.price_return[(current_data.index >= (timepoint - pd.Timedelta(str(self.days_ar_model)+' days')))].to_numpy(), lags=1,rescale=True)
@@ -78,9 +80,10 @@ class AutoRegressiveStrategy:
             forecasts            = res.forecast(horizon=1, reindex=False)
 
             return_forecast      = forecasts.mean.to_numpy()[0][-1] / scale
-
+            sd_forecast          = (forecasts.variance.to_numpy()[0][-1] / np.power(res.scale,2))**0.5 * self.annualization_factor
+            
             result_dict          = {'return_forecast': return_forecast,
-                                    'sd_forecast'    : res.conditional_volatility[-1]}            
+                                    'sd_forecast'    : sd_forecast}            
             return result_dict
         
     #####################################
