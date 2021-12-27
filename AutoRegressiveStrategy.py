@@ -299,12 +299,15 @@ class AutoRegressiveStrategy:
         TICK_B_PRE        = math.log(current_strat_obs.decimal_adjustment*limit_range_upper,1.0001)
         TICK_B            = int(math.floor(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         
-        # In limit, make sure lower tick is above active tick
-        if TICK_A == current_strat_obs.price_tick:
-            TICK_A = TICK_A + current_strat_obs.tickSpacing
-        # In limit, make sure upper tick is below active tick
-        elif TICK_B == current_strat_obs.price_tick:
-            TICK_B = TICK_B - current_strat_obs.tickSpacing
+        if token_0_limit:
+            # If token 0 in limit, make sure lower tick is above active tick
+            if TICK_A <= current_strat_obs.price_tick_current:
+                TICK_A = TICK_A + current_strat_obs.tickSpacing
+        else:
+            # In token 1 in limit, make sure upper tick is below active tick
+            if TICK_B >= current_strat_obs.price_tick_current:
+                TICK_B = TICK_B - current_strat_obs.tickSpacing
+
         
         # Make sure Tick A < Tick B. If not make one tick    
         if TICK_A == TICK_B:
