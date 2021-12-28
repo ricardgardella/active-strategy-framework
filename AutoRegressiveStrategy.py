@@ -233,7 +233,6 @@ class AutoRegressiveStrategy:
             TICK_A             = int(math.floor(TICK_A_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
         else:
             # If lower end of base range is negative, fix at 0.0
-            base_range_lower   = 2**-128
             TICK_A             = math.ceil(math.log((2**-128),1.0001)/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing
 
         # Upper Range
