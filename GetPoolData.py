@@ -9,29 +9,34 @@ import time
 # From a given pool
 # Returns json requests
 
-def query_univ3_graph(query: str, variables=None) -> dict:
-    univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
+def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:
     
+    if network == 'mainnet':
+        univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
+    elif network == 'arbitrum':
+        univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-arbitrum-one'
+        
     if variables:
         params = {'query': query, 'variables': variables}
     else:
         params = {'query': query}
+        
     response = requests.post(univ3_graph_url, json=params)
     return response.json()
 
-def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False):        
+def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False,network='mainnet'):        
         
     request_swap = [] 
     
     if DOWNLOAD_DATA:
 
         current_payload = generate_first_event_payload('swaps',contract_address)
-        current_id      = query_univ3_graph(current_payload)['data']['pool']['swaps'][0]['id']
+        current_id      = query_univ3_graph(current_payload,network=network)['data']['pool']['swaps'][0]['id']
         finished        = False
 
         while not finished:
             current_payload = generate_event_payload('swaps',contract_address,str(1000))
-            response        = query_univ3_graph(current_payload,{'paginateId':current_id})['data']['pool']['swaps']
+            response        = query_univ3_graph(current_payload,variables={'paginateId':current_id},network=network)['data']['pool']['swaps']
 
             if len(response) == 0:
                 finished = True
