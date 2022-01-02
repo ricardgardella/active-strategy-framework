@@ -197,12 +197,16 @@ def simulate_strategy(price_data,swap_data,strategy_in,
 ########################################################
 
 def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
+    
+    # token_0_usd_data has in quotePrice 
+    # token_0 / usd value for each index
+    
     data_strategy                    = pd.DataFrame([strategy_in.dict_components(i) for i in simulations])
     data_strategy                    = data_strategy.set_index('time',drop=False)
     data_strategy                    = data_strategy.sort_index()
     
-    token_0_initial                  = simulations[0].liquidity_ranges[0]['token_0'] + simulations[0].liquidity_ranges[1]['token_0']
-    token_1_initial                  = simulations[0].liquidity_ranges[0]['token_1'] + simulations[0].liquidity_ranges[1]['token_1']
+    token_0_initial                  = simulations[0].liquidity_ranges[0]['token_0'] + simulations[0].liquidity_ranges[1]['token_0'] + simulations[0].token_0_left_over
+    token_1_initial                  = simulations[0].liquidity_ranges[0]['token_1'] + simulations[0].liquidity_ranges[1]['token_1'] + simulations[0].token_1_left_over
     
     if token_0_usd_data is None:
         data_strategy['value_position_usd'] = data_strategy['value_position']
@@ -306,56 +310,68 @@ def analyze_strategy(data_usd,frequency = 'M'):
     return summary_strat
 
 
-def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000'):
+def plot_strategy(data_strategy,y_axis_label,base_color = '#ff0000',flip_price_axis=False):
     import plotly.graph_objects as go
     CHART_SIZE = 300
-
+    
+    if flip_price_axis:
+        data_strategy_here = data_strategy.copy()
+        data_strategy_here.base_range_lower  = 1/data_strategy_here.base_range_lower
+        data_strategy_here.base_range_upper  = 1/data_strategy_here.base_range_upper
+        data_strategy_here.limit_range_lower = 1/data_strategy_here.limit_range_lower
+        data_strategy_here.limit_range_upper = 1/data_strategy_here.limit_range_upper
+        data_strategy_here.reset_range_lower = 1/data_strategy_here.reset_range_lower
+        data_strategy_here.reset_range_upper = 1/data_strategy_here.reset_range_upper
+        data_strategy_here.price             = 1/data_strategy_here.price
+    else:
+        data_strategy_here = data_strategy.copy()
+        
     fig_strategy = go.Figure()
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['base_range_lower'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['base_range_lower'],
         fill=None,
         mode='lines',
         showlegend = False,
         line_color=base_color,
         ))
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['base_range_upper'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['base_range_upper'],
         name='Base Position',
         fill='tonexty', # fill area between trace0 and trace1
         mode='lines', line_color=base_color))
 
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['limit_range_lower'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['limit_range_lower'],
         fill=None,
         mode='lines',
         showlegend = False,
         line_color='#6f6f6f'))
 
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['limit_range_upper'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['limit_range_upper'],
         name='Base + Limit Position',
         fill='tonexty', # fill area between trace0 and trace1
         mode='lines', line_color='#6f6f6f',))
 
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['reset_range_lower'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['reset_range_lower'],
         name='Strategy Reset Bound',
         line=dict(width=2,dash='dot',color='black')))
 
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['reset_range_upper'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['reset_range_upper'],
         showlegend = False,
         line=dict(width=2,dash='dot',color='black',)))
 
     fig_strategy.add_trace(go.Scatter(
-        x=data_strategy['time'], 
-        y=data_strategy['price'],
+        x=data_strategy_here['time'], 
+        y=data_strategy_here['price'],
         name='Price',
         line=dict(width=2,color='black')))
 
