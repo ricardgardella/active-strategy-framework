@@ -9,18 +9,19 @@ This repository contains several python scripts that are used by [Gamma Strategi
 1. [ActiveStrategyFramework.py](ActiveStrategyFramework.py) base code of the framework which executues a ```Strategy```, conducting either back-testing simulations (```simulate_strategy``` function and passing in historical swap data), or conducting a live implementation of the strategy.
 2. [ResetStrategy.py](ResetStrategy.py) first implementation of a ```Strategy``` which uses the empirical distribution of returns in order to predict future prices and set ranges for the LP positions.
 2. [AutoRegressiveStrategy.py](AutoRegressiveStrategy.py) second implementation of the ```Strategy```, using an AR(1)-GARCH(1,1) model.
-3. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from TheGraph, Bitquery and Flipside Crypto.
+3. [GetPoolData.py](GetPoolData.py) which downloads the data necessary for the simulations from two potential sets of data: The Graph + Bitquery + Flipside Crypto, and blockchain-etl via Google BigQuery.
 4. [UNI_v3_funcs.py](UNI_v3_funcs.py) which is a slightly modified version of [JNP777's](https://github.com/JNP777/UNI_V3-Liquitidy-amounts-calcs) Python implementation of Uniswap v3's [liquidity math](https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/LiquidityAmounts.sol). 
 
 In order to provide an illustration of potential usage, we have included two Jupyter Notebooks that show how to use the framework:
 - [1_Reset_Strategy_Example.ipynb](1_Reset_Strategy_Example.ipynb) runs an simple 'reset strategy' in the spirit of the work reviewed in this [Gamma Strategies article](https://medium.com/gamma-strategies/expected-price-range-strategies-in-uniswap-v3-833dff253f84). 
-- [2_AutoRegressive_Strategy_Example.ipynb](2_AutoRegressive_Strategy_Example.ipynb) does the same but with the Autoregressive strategy
+- [2_AutoRegressive_Strategy_Example.ipynb](2_AutoRegressive_Strategy_Example.ipynb) does the same but with the Autoregressive strategy.
+- [3_Uniswap_Simulation.ipynb](3_Uniswap_Simulation.ipynb) applies the Autoregressive strategy on the UNI-ETH 0.30% pool.
 
-We have constructed a flexible framework for active LP strategy simulations that use **the full Uniswap v3 swap history** in order to improve accurracy of fee income. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5th 2021 is when swap data starts to show up consistently). 
+We have constructed a flexible framework for active LP strategy simulations that uses **the full Uniswap v3 swap history** in order to improve accurracy of fee income. Thefore simulations are available in the time period since Unsiwap v3 was released (May 5th 2021 is when swap data starts to show up consistently). 
 
 ## Simulating your own strategy
 
-In order to simulate your own strategy you should clone this repository to your computer, and implement your algorithm in a new ```Strategy``` script, where you define a class which must include the following functions (see the [ResetStrategy.py](ResetStrategy.py) script for an example):
+In order to simulate your own strategy clone this repository to your computer, and implement your algorithm in a new ```Strategy``` script, where you define a class which must include the following functions (see the [ResetStrategy.py](ResetStrategy.py) script for an example):
 
 1. ```set_liquidity_ranges``` computes where the LP ranges are set in an LP strategy and stores the virtual liquidity placed for each position. 
 2. ```check_strategy``` to implement your algorithm's rebalancing logic.
@@ -32,18 +33,31 @@ The template is currently adapted to the strategies used by [Visor Finance's Hyp
 
 ## Data & simulating a different pool
 
-The simulator is currently set up to analyze the [USDC/WETH 0.3% pool](https://etherscan.io/address/0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8). We use two data sources that you will need to adjust to update data / analyze a different pool:
+The framework is set up to use two potential data sources in order to conduct the simulations, with the relevant functions available in [GetPoolData.py](GetPoolData.py):
 
-1. **[TheGraph](https://thegraph.com/legacy-explorer/subgraph/uniswap/uniswap-v3):** We obtain the full history of Uniswap v3 swaps from whatever pool we need, in order to accurately simulate the performance of the simulated strategy.
-2. **[Bitquery](https://graphql.bitquery.io/ide):** We obtain historical Uniswap prices, quoted in whatever denomination we need. To update the data or query another pool you will need to sign up, obtain an API key and save it in afile in a file called ```config.py``` in this directory, as a string: ```BITQUERY_API_TOKEN = XXXXXXXX```.
-2. **[Flipside Crypto](https://app.flipsidecrypto.com/velocity):** We obtain the virtual liquidity of the pool at every block, which is used to approximate the fee income earned in the pool, as described in their [documentation](https://docs.flipsidecrypto.com/our-data/tables/uniswap-v3-tables/pool-stats).
+**blockhain-etl via Google BigQuery **
 
-To update the data get an API key and set ```DOWNLOAD_DATA = True``` in the notebook.
+The pattern to use these data sources can be seen in [3_Uniswap_Simulation.ipynb](3_Uniswap_Simulation.ipynb). The data sources is [blockchain-etl](https://github.com/blockchain-etl), which indexes the relevant events from Uniswap v3, and can be easily queried through Google's BigQuery service. This data source can offer all the required fields for the simulations, but may incur a cost.  
 
-The current implementation is very flexible and allows to analyze a different pool with a few changes:
+*Instructions*
+1. Install [Python client for Google BigQuery](https://github.com/googleapis/python-bigquery)
+2. Generate a [service account key](https://cloud.google.com/iam/docs/creating-managing-service-account-keys) and download to your computer
+3. Generate a file called ```config.py``` in the directory where the ActiveStrategyFramework is stored and point the direction of the file as a variable called ```GOOGLE_SERVICE_AUTH_JSON```  (eg. ```GOOGLE_SERVICE_AUTH_JSON=/point/to/file/auth_key.json```)
+4. Follow the pattern outlined in [3_Uniswap_Simulation.ipynb](3_Uniswap_Simulation.ipynb)
+5. If you want to simulate a different pool simply change the ```uni_pool_address``` variable with the pool address that you want to simulate.
 
-1. Generate a new Flipside Crypto query like the one in the [example_flipside_query.txt](example_flipside_query.txt) file, with the ```pool_address``` for the pair that you are interested. Note that due to a 100,000 row limit, we generate two queries for the USDC/WETH 0.3%, which explains the ```BLOCK_ID``` condition, to split the data into reasonable chunks. A less active pool might not need this split.
-2. Modify the ```get_liquidity_flipside``` function from [GetPoolData.py](GetPoolData.py) to point to your new queries.
+**The Graph + Bitquery + Flipside Crypto**
+
+The pattern to use these data sources can be seen in [2_AutoRegressive_Strategy_Example.ipynb](2_AutoRegressive_Strategy_Example.ipynb). The data sources are:
+
+- **[The Graph](https://thegraph.com/legacy-explorer/subgraph/uniswap/uniswap-v3):** We obtain the full history of Uniswap v3 swaps from whatever pool we need, in order to accurately simulate the performance of the simulated strategy.
+- **[Bitquery](https://graphql.bitquery.io/ide):** We obtain historical token prices from Uniswap v2 and v3. 
+- **[Flipside Crypto](https://app.flipsidecrypto.com/velocity):** We obtain the virtual liquidity of the pool at every block, which is used to approximate the fee income earned in the pool, as described in their [documentation](https://docs.flipsidecrypto.com/our-data/tables/uniswap-v3-tables/pool-stats).
+
+*Instructions*
+1. Obtain a free API key from [Bitquery](https://graphql.bitquery.io/ide).
+2. Save it in a file in ```config.py``` in the directory where the ActiveStrategyFramework is stored as a variable called ```BITQUERY_API_TOKEN``` (eg. ```BITQUERY_API_TOKEN = XXXXXXXX```).
+3. Generate a new Flipside Crypto query like the one in the [example_flipside_query.txt](example_flipside_query.txt) file, with the ```pool_address``` for the pair that you are interested. Note that due to a 100,000 row limit, we generate two queries for the USDC/WETH 0.3%, which explains the ```BLOCK_ID``` condition, to split the data into reasonable chunks. A less active pool might not need this split.
 
 ## Potential Sources of inaccurracy
 
