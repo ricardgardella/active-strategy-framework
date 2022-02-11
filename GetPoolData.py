@@ -5,9 +5,46 @@ import pickle
 import importlib
 from itertools import compress
 import time
-# Extract all Mint, Burn, and Swap Events
-# From a given pool
-# Returns json requests
+import os
+from google.cloud import bigquery
+
+##############################################################
+# Get Data from Google Bigquery's public blockcahin_etl dataset
+##############################################################
+def download_bigquery_price(contract_address,date_begin,date_end):
+
+    client = bigquery.Client()
+
+    query = """
+            SELECT *
+            FROM blockchain-etl.ethereum_uniswap.UniswapV3Pool_event_Swap
+            where contract_address = lower('"""+contract_address.lower()+"""') and
+              block_timestamp >= '"""+date_begin+"""' and block_timestamp <= '"""+date_end+"""'
+            """
+    query_job       = client.query(query)  # Make an API request.
+    return query_job.to_dataframe(create_bqstorage_client=False)
+
+def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decimals_1):
+    
+    DECIMAL_ADJ                          = 10**(decimals_1  - decimals_0)
+    resulting_data                       = download_bigquery_price(contract_address,date_begin,date_end)
+    resulting_data['sqrtPriceX96_float'] = resulting_data['sqrtPriceX96'].astype(float)
+    resulting_data['quotePrice']         = ((resulting_data['sqrtPriceX96_float'] / 2**96) **2) / DECIMAL_ADJ
+    resulting_data['block_date']         = pd.to_datetime(resulting_data['block_timestamp'])
+    resulting_data['time']         = pd.to_datetime(resulting_data['block_timestamp'])
+    resulting_data = resulting_data.set_index('block_date').sort_index()
+
+    resulting_data['tick_swap']         = resulting_data['tick'].astype(int)
+    resulting_data['amount0_adj']       = resulting_data['amount0'].astype(float) / decimals_0
+    resulting_data['amount1_adj']       = resulting_data['amount1'].astype(float) / decimals_1
+    resulting_data['virtual_liquidity'] = resulting_data['liquidity'].astype(float) / decimals_1
+    resulting_data['token_in']    = resulting_data.apply(lambda x: 'token0' if (x['amount0_adj'] < 0) else 'token1',axis=1)
+    
+    return resulting_data
+
+##############################################################
+# Get all swaps from the Graph and Virtual Liquidity from flipside
+##############################################################
 
 def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:
     
@@ -52,9 +89,7 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False,network='mainne
            
     return pd.DataFrame(request_swap)
 
-##############################################################
-# Get Pool Virtual Liquidity Data using Flipside Data Pool Stats Table
-##############################################################
+
 def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
     
 
@@ -72,10 +107,7 @@ def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
    
     return stats_data
     
-##############################################################
-# Get all swaps for the pool using flipside data's price feed
-# For the contract's liquidity
-##############################################################
+
 def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DATA = False):
 
     # Download  events
@@ -113,12 +145,12 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     if DOWNLOAD_DATA:        
         # Paginate using limit and an offset
         offset = 0
-        current_request = run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
+        current_request = run_bitquery_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
         request.append(current_request)
         
         # When a request has less than 10,000 rows we are at the last one
         while len(current_request['data']['ethereum']['dexTrades']) == max_rows_bitquery:
-            current_request = run_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
+            current_request = run_bitquery_query(generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query),api_token)
             request.append(current_request)
             offset += max_rows_bitquery
             if RATE_LIMIT:
@@ -161,12 +193,12 @@ def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file
     if DOWNLOAD_DATA:        
         # Paginate using limit and an offset
         offset = 0
-        current_request = run_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
+        current_request = run_bitquery_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
         request.append(current_request)
         
         # When a request has less than 10,000 rows we are at the last one
         while len(current_request['data']['ethereum']['dexTrades']) == max_rows_bitquery:
-            current_request = run_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
+            current_request = run_bitquery_query(generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange_to_query),api_token)
             request.append(current_request)
             offset += max_rows_bitquery
             if RATE_LIMIT:
@@ -198,11 +230,6 @@ def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file
     price_data            = price_data.set_index('time_pd')
 
     return price_data
-
-##############################################################
-# Generate payload for bitquery events
-##############################################################
-
 
 def generate_event_payload(event,address,n_query):
         payload =   '''
@@ -312,12 +339,13 @@ def generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange
     
     return payload
 
-# Make dependent on smart contract?
-#smartContractAddress: {is: "'''+contract_address+'''"}   
+
+
+
 ##############################################################
 # A simple function to use requests.post to make the API call
 ##############################################################
-def run_query(query,api_token):  
+def run_bitquery_query(query,api_token):  
     url       = 'https://graphql.bitquery.io/'
     headers = {'X-API-KEY': api_token}
     request = requests.post(url,

@@ -111,8 +111,8 @@ class StrategyObservation:
                     else:
                         fraction_fees_earned_position = self.liquidity_ranges[i]['position_liquidity']/(self.liquidity_ranges[i]['position_liquidity'] + relevant_swaps.iloc[s]['virtual_liquidity'])
 
-                    fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
-                    fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
+                    fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position
+                    fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position
         
         self.token_0_fees_uncollected += fees_earned_token_0
         self.token_1_fees_uncollected += fees_earned_token_1
@@ -218,10 +218,14 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
     else:
         # Merge in usd price data
         token_0_usd_data['price_0_usd']    = 1/token_0_usd_data['quotePrice']
-        token_0_usd_data                   = token_0_usd_data.sort_index()
+        token_0_usd_data['time_pd']        = token_0_usd_data.index
+        token_0_usd_data                   = token_0_usd_data.set_index('time_pd').sort_index()
+        
         data_strategy['time_pd']           = pd.to_datetime(data_strategy['time'],utc=True)
-        data_strategy                      = data_strategy.set_index('time_pd')
+        data_strategy                      = data_strategy.set_index('time_pd').sort_index()
         data_return                        = pd.merge_asof(data_strategy,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
+        
+        # Generate usd position values
         data_return['value_position_usd']  = data_return['value_position']*data_return['price_0_usd']
         data_return['cum_fees_0']          = data_return['token_0_fees'].cumsum() + (data_return['token_1_fees'] / data_return['price']).cumsum()
         data_return['cum_fees_usd']        = data_return['cum_fees_0']*data_return['price_0_usd']
@@ -239,14 +243,7 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
 def fill_time(data):
     price_range               = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
     price_range               = price_range.set_index('time_pd')
-    new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left')
-    new_data['baseCurrency']  = new_data['baseCurrency'].ffill()
-    new_data['quoteCurrency'] = new_data['quoteCurrency'].ffill()
-    new_data['baseAmount']    = new_data['baseAmount'].ffill()
-    new_data['quoteAmount']   = new_data['quoteAmount'].ffill()
-    new_data['quotePrice']    = new_data['quotePrice'].ffill()
-    new_data['tradeAmount']   = new_data['tradeAmount'].fillna(0)
-    
+    new_data                  = price_range.merge(data,left_index=True,right_index=True,how='left').ffill()    
     return new_data
 
 def aggregate_price_data(data,frequency):
@@ -261,10 +258,6 @@ def aggregate_price_data(data,frequency):
     price_range                           = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
     price_range                           = price_range.set_index('time_pd')
     new_data                              = price_range.merge(data,left_index=True,right_index=True,how='left')
-    new_data['baseCurrency']              = new_data['baseCurrency'].ffill()
-    new_data['quoteCurrency']             = new_data['quoteCurrency'].ffill()
-    new_data['baseAmount']                = new_data['baseAmount'].ffill()
-    new_data['quoteAmount']               = new_data['quoteAmount'].ffill()
     new_data['quotePrice']                = new_data['quotePrice'].ffill()
     price_data_aggregated                 = new_data.resample(resample_option).last().copy()
     price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()

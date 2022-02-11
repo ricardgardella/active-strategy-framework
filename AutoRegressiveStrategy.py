@@ -114,7 +114,7 @@ class AutoRegressiveStrategy:
         #######################
         LEFT_RANGE_LOW      = current_strat_obs.price < current_strat_obs.strategy_info['reset_range_lower']
         LEFT_RANGE_HIGH     = current_strat_obs.price > current_strat_obs.strategy_info['reset_range_upper']
-
+        
         #######################
         # 2. Volatility has dropped 
         #######################
@@ -195,7 +195,7 @@ class AutoRegressiveStrategy:
         else:
             strategy_info_here = copy.deepcopy(current_strat_obs.strategy_info)
             
-        # Limit return prediction to a 15% change
+        # Limit return prediction to a return_forecast_cutoff % change
         if np.abs(model_forecast['return_forecast']) > self.return_forecast_cutoff:
                     model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast']) * self.return_forecast_cutoff
                 
