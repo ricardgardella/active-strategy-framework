@@ -34,11 +34,15 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
     resulting_data['time']         = pd.to_datetime(resulting_data['block_timestamp'])
     resulting_data = resulting_data.set_index('block_date').sort_index()
 
-    resulting_data['tick_swap']         = resulting_data['tick'].astype(int)
-    resulting_data['amount0_adj']       = resulting_data['amount0'].astype(float) / decimals_0
-    resulting_data['amount1_adj']       = resulting_data['amount1'].astype(float) / decimals_1
-    resulting_data['virtual_liquidity'] = resulting_data['liquidity'].astype(float) / decimals_1
-    resulting_data['token_in']    = resulting_data.apply(lambda x: 'token0' if (x['amount0_adj'] < 0) else 'token1',axis=1)
+    resulting_data['tick_swap']             = resulting_data['tick'].astype(int)
+    resulting_data['amount0']               = resulting_data['amount0'].astype(float)
+    resulting_data['amount1']               = resulting_data['amount1'].astype(float)
+    resulting_data['amount0_adj']           = resulting_data['amount0'].astype(float) / 10**decimals_0
+    resulting_data['amount1_adj']           = resulting_data['amount1'].astype(float) / 10**decimals_1
+    resulting_data['virtual_liquidity']     = resulting_data['liquidity'].astype(float)
+    resulting_data['virtual_liquidity_adj'] = resulting_data['liquidity'].astype(float) / (10**((decimals_0  + decimals_1)/2))
+    resulting_data['token_in']              = resulting_data.apply(lambda x: 'token0' if (x['amount0_adj'] < 0) else 'token1',axis=1)
+    resulting_data['traded_in']             = resulting_data.apply(lambda x: -x['amount0_adj'] if (x['amount0_adj'] < 0) else -x['amount1_adj'],axis=1).astype(float)
     
     return resulting_data
 
@@ -94,8 +98,7 @@ def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
     
 
     if DOWNLOAD_DATA:        
-        for i in flipside_query:
-            request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_query]
+        request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_query]
         with open('./data/'+file_name+'_liquidity.pkl', 'wb') as output:
             pickle.dump(request_stats, output, pickle.HIGHEST_PROTOCOL)
     else:
