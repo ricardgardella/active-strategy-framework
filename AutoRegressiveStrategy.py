@@ -17,12 +17,15 @@ class AutoRegressiveStrategy:
         if   data_frequency == 'D':
             self.annualization_factor = 365**.5
             self.resample_option      = '1D'
+            self.window_size          = 15
         elif data_frequency == 'H':
             self.annualization_factor = (24*365)**.5
             self.resample_option      = '1H'
+            self.window_size          = 30
         elif data_frequency == 'M':
             self.annualization_factor = (60*24*365)**.5
             self.resample_option      = '1 min'
+            self.window_size          = 60
             
         
         self.alpha_param            = alpha_param
@@ -239,8 +242,7 @@ class AutoRegressiveStrategy:
         # Upper Range
         TICK_B_PRE        = math.log(current_strat_obs.decimal_adjustment*base_range_upper,1.0001)
         TICK_B            = int(math.floor(TICK_B_PRE/current_strat_obs.tickSpacing)*current_strat_obs.tickSpacing)
-        
-        
+                
         # Make sure Tick A < Tick B. If not make one tick
         if TICK_A == TICK_B:
             TICK_B = TICK_A + current_strat_obs.tickSpacing
@@ -248,11 +250,11 @@ class AutoRegressiveStrategy:
         liquidity_placed_base   = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B,current_strat_obs.liquidity_in_0, \
                                                                        current_strat_obs.liquidity_in_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
         
-        base_0_amount,base_1_amount   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,liquidity_placed_base\
+        base_amount_0_placed,base_amount_1_placed   = UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,liquidity_placed_base\
                                                                  ,current_strat_obs.decimals_0,current_strat_obs.decimals_1)
         
-        total_token_0_amount  -= base_0_amount
-        total_token_1_amount  -= base_1_amount
+        total_token_0_amount  -= base_amount_0_placed
+        total_token_1_amount  -= base_amount_1_placed
 
         base_liq_range =       {'price'              : current_strat_obs.price,
                                 'target_price'       : target_price,
@@ -261,8 +263,8 @@ class AutoRegressiveStrategy:
                                 'lower_bin_price'    : base_range_lower,
                                 'upper_bin_price'    : base_range_upper,
                                 'time'               : current_strat_obs.time,
-                                'token_0'            : base_0_amount,
-                                'token_1'            : base_1_amount,
+                                'token_0'            : base_amount_0_placed,
+                                'token_1'            : base_amount_1_placed,
                                 'position_liquidity' : liquidity_placed_base,
                                 'volatility'         : model_forecast['sd_forecast'],
                                 'reset_time'         : current_strat_obs.time,
@@ -276,6 +278,7 @@ class AutoRegressiveStrategy:
         
         limit_amount_0 = total_token_0_amount
         limit_amount_1 = total_token_1_amount
+        
         token_0_limit  = limit_amount_0*current_strat_obs.price > limit_amount_1
         # Place singe sided highest value
         if token_0_limit:        
@@ -317,9 +320,9 @@ class AutoRegressiveStrategy:
             else:
                 TICK_B -= current_strat_obs.tickSpacing
 
-        liquidity_placed_limit        = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B, \
+        liquidity_placed_limit                      = int(UNI_v3_funcs.get_liquidity(current_strat_obs.price_tick_current,TICK_A,TICK_B, \
                                                                        limit_amount_0,limit_amount_1,current_strat_obs.decimals_0,current_strat_obs.decimals_1))
-        limit_0_amount,limit_1_amount =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,\
+        limit_amount_0_placed,limit_amount_1_placed =     UNI_v3_funcs.get_amounts(current_strat_obs.price_tick_current,TICK_A,TICK_B,\
                                                                      liquidity_placed_limit,current_strat_obs.decimals_0,current_strat_obs.decimals_1)  
 
 
@@ -330,8 +333,8 @@ class AutoRegressiveStrategy:
                                  'lower_bin_price'    : limit_range_lower,
                                  'upper_bin_price'    : limit_range_upper,                                 
                                  'time'               : current_strat_obs.time,
-                                 'token_0'            : limit_0_amount,
-                                 'token_1'            : limit_1_amount,
+                                 'token_0'            : limit_amount_0_placed,
+                                 'token_1'            : limit_amount_1_placed,
                                  'position_liquidity' : liquidity_placed_limit,
                                  'volatility'         : model_forecast['sd_forecast'],
                                  'reset_time'         : current_strat_obs.time,
@@ -341,12 +344,8 @@ class AutoRegressiveStrategy:
         
 
         # Update token amount supplied to pool
-        total_token_0_amount  -= limit_0_amount
-        total_token_1_amount  -= limit_1_amount
-        
-        # Check we didn't allocate more liquidiqity than available
-        assert current_strat_obs.liquidity_in_0 >= total_token_0_amount
-        assert current_strat_obs.liquidity_in_1 >= total_token_1_amount
+        total_token_0_amount  -= limit_amount_0_placed
+        total_token_1_amount  -= limit_amount_1_placed
         
         # How much liquidity is not allcated to ranges
         current_strat_obs.token_0_left_over = max([total_token_0_amount,0.0])
@@ -357,8 +356,7 @@ class AutoRegressiveStrategy:
         current_strat_obs.liquidity_in_1 = 0.0
         
         return save_ranges,strategy_info_here
-        
-        
+                
     ########################################################
     # Extract strategy parameters
     ########################################################
@@ -405,11 +403,11 @@ class AutoRegressiveStrategy:
             this_data['token_1_total']          = total_token_1 + strategy_observation.token_1_left_over + strategy_observation.token_1_fees_uncollected
 
             # Value Variables
-            this_data['value_position']         = this_data['token_0_total']     + this_data['token_1_total']     / this_data['price']
-            this_data['value_allocated']        = this_data['token_0_allocated'] + this_data['token_1_allocated'] / this_data['price']
-            this_data['value_left_over']        = this_data['token_0_left_over'] + this_data['token_1_left_over'] / this_data['price']
+            this_data['value_position_in_token_0']         = this_data['token_0_total']     + this_data['token_1_total']     / this_data['price']
+            this_data['value_allocated_in_token_0']        = this_data['token_0_allocated'] + this_data['token_1_allocated'] / this_data['price']
+            this_data['value_left_over_in_token_0']        = this_data['token_0_left_over'] + this_data['token_1_left_over'] / this_data['price']
             
-            this_data['base_position_value']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] / this_data['price']
-            this_data['limit_position_value']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] / this_data['price']
+            this_data['base_position_value_in_token_0']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] / this_data['price']
+            this_data['limit_position_value_in_token_0']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] / this_data['price']
              
             return this_data

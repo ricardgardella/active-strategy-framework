@@ -111,8 +111,8 @@ class StrategyObservation:
                     else:
                         fraction_fees_earned_position = self.liquidity_ranges[i]['position_liquidity']/(self.liquidity_ranges[i]['position_liquidity'] + relevant_swaps.iloc[s]['virtual_liquidity'])
 
-                    fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position
-                    fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position
+                    fees_earned_token_0 += in_range * token_0_in     * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
+                    fees_earned_token_1 += in_range * (1-token_0_in) * self.fee_tier * fraction_fees_earned_position * relevant_swaps.iloc[s]['traded_in']
         
         self.token_0_fees_uncollected += fees_earned_token_0
         self.token_1_fees_uncollected += fees_earned_token_1
@@ -209,29 +209,33 @@ def generate_simulation_series(simulations,strategy_in,token_0_usd_data = None):
     token_1_initial                  = simulations[0].liquidity_ranges[0]['token_1'] + simulations[0].liquidity_ranges[1]['token_1'] + simulations[0].token_1_left_over
     
     if token_0_usd_data is None:
-        data_strategy['value_position_usd'] = data_strategy['value_position']
-        data_strategy['cum_fees_usd']       = data_strategy['token_0_fees'].cumsum() + (data_strategy['token_1_fees'] / data_strategy['price']).cumsum()
-        data_strategy['token_0_hold_usd']   = token_0_initial
-        data_strategy['token_1_hold_usd']   = token_1_initial / data_strategy['price']
-        data_strategy['value_hold_usd']     = data_strategy['token_0_hold_usd'] + data_strategy['token_1_hold_usd']
+        data_strategy['value_position_usd']       = data_strategy['value_position_in_token_0']
+        data_strategy['base_position_value_usd']  = data_strategy['base_position_value_in_token_0']
+        data_strategy['limit_position_value_usd'] = data_strategy['limit_position_value_in_token_0']
+        data_strategy['cum_fees_usd']             = data_strategy['token_0_fees'].cumsum() + (data_strategy['token_1_fees'] / data_strategy['price']).cumsum()
+        data_strategy['token_0_hold_usd']         = token_0_initial
+        data_strategy['token_1_hold_usd']         = token_1_initial / data_strategy['price']
+        data_strategy['value_hold_usd']           = data_strategy['token_0_hold_usd'] + data_strategy['token_1_hold_usd']
         data_return = data_strategy
     else:
         # Merge in usd price data
-        token_0_usd_data['price_0_usd']    = 1/token_0_usd_data['quotePrice']
-        token_0_usd_data['time_pd']        = token_0_usd_data.index
-        token_0_usd_data                   = token_0_usd_data.set_index('time_pd').sort_index()
+        token_0_usd_data['price_0_usd']         = 1/token_0_usd_data['quotePrice']
+        token_0_usd_data['time_pd']             = token_0_usd_data.index
+        token_0_usd_data                        = token_0_usd_data.set_index('time_pd').sort_index()
         
-        data_strategy['time_pd']           = pd.to_datetime(data_strategy['time'],utc=True)
-        data_strategy                      = data_strategy.set_index('time_pd').sort_index()
-        data_return                        = pd.merge_asof(data_strategy,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
+        data_strategy['time_pd']                = pd.to_datetime(data_strategy['time'],utc=True)
+        data_strategy                           = data_strategy.set_index('time_pd').sort_index()
+        data_return                             = pd.merge_asof(data_strategy,token_0_usd_data['price_0_usd'],on='time_pd',direction='backward',allow_exact_matches = True)
         
         # Generate usd position values
-        data_return['value_position_usd']  = data_return['value_position']*data_return['price_0_usd']
-        data_return['cum_fees_0']          = data_return['token_0_fees'].cumsum() + (data_return['token_1_fees'] / data_return['price']).cumsum()
-        data_return['cum_fees_usd']        = data_return['cum_fees_0']*data_return['price_0_usd']
-        data_return['token_0_hold_usd']    = token_0_initial * data_return['price_0_usd']
-        data_return['token_1_hold_usd']    = token_1_initial * data_return['price_0_usd'] / data_return['price']
-        data_return['value_hold_usd']      = data_return['token_0_hold_usd'] + data_return['token_1_hold_usd']
+        data_return['value_position_usd']       = data_return['value_position_in_token_0']*data_return['price_0_usd']
+        data_return['base_position_value_usd']  = data_return['base_position_value_in_token_0']*data_return['price_0_usd']
+        data_return['limit_position_value_usd'] = data_return['limit_position_value_in_token_0']*data_return['price_0_usd']
+        data_return['cum_fees_0']               = data_return['token_0_fees'].cumsum() + (data_return['token_1_fees'] / data_return['price']).cumsum()
+        data_return['cum_fees_usd']             = data_return['cum_fees_0']*data_return['price_0_usd']
+        data_return['token_0_hold_usd']         = token_0_initial * data_return['price_0_usd']
+        data_return['token_1_hold_usd']         = token_1_initial * data_return['price_0_usd'] / data_return['price']
+        data_return['value_hold_usd']           = data_return['token_0_hold_usd'] + data_return['token_1_hold_usd']
         
     return data_return
 
@@ -255,16 +259,31 @@ def aggregate_price_data(data,frequency):
     elif frequency == 'D':
             resample_option      = '1D'
     
-    price_range                           = pd.DataFrame({'time_pd': pd.date_range(data.index.min(),data.index.max(),freq='1 min',tz='UTC')})
+    data_floored_min                      = data.copy()
+    data_floored_min.index                = data_floored_min.index.floor('Min')    
+    price_range                           = pd.DataFrame({'time_pd': pd.date_range(data_floored_min.index.min(),data_floored_min.index.max(),freq='1 min',tz='UTC')})
     price_range                           = price_range.set_index('time_pd')
-    new_data                              = price_range.merge(data,left_index=True,right_index=True,how='left')
+    new_data                              = price_range.merge(data_floored_min,left_index=True,right_index=True,how='left')
     new_data['quotePrice']                = new_data['quotePrice'].ffill()
     price_data_aggregated                 = new_data.resample(resample_option).last().copy()
     price_data_aggregated['price_return'] = price_data_aggregated['quotePrice'].pct_change()
     return price_data_aggregated
 
-def analyze_strategy(data_usd,frequency = 'M'):
+def aggregate_swap_data(data, frequency):
+    
+    if   frequency == 'M':
+            resample_option      = '1 min'
+    elif frequency == 'H':
+            resample_option      = '1H'
+    elif frequency == 'D':
+            resample_option      = '1D'
+            
+    swap_data_tmp = data[['amount0_adj', 'amount1_adj', 'virtual_liquidity_adj']].resample(resample_option).agg(
+        {'amount0_adj': np.sum, 'amount1_adj': np.sum, 'virtual_liquidity_adj': np.median})
+    
+    return swap_data_tmp.ffill()
 
+def analyze_strategy(data_usd,frequency = 'M'):
     
     if   frequency == 'M':
             annualization_factor = 365*24*60
@@ -291,10 +310,10 @@ def analyze_strategy(data_usd,frequency = 'M'):
                         'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)),
                         'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),
                         'impermanent_loss'     : ((strategy_last_obs['value_position_usd'] - strategy_last_obs['value_hold_usd']) / strategy_last_obs['value_hold_usd'])[0],
-                        'mean_base_position'   : (data_usd['base_position_value']/ \
-                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).mean(),        
-                        'median_base_position' : (data_usd['base_position_value']/ \
-                                                  (data_usd['base_position_value']+data_usd['limit_position_value']+data_usd['value_left_over'])).median(),
+                        'mean_base_position'   : (data_usd['base_position_value_in_token_0']/ \
+                                                  (data_usd['base_position_value_in_token_0']+data_usd['limit_position_value_in_token_0']+data_usd['value_left_over_in_token_0'])).mean(),        
+                        'median_base_position' : (data_usd['base_position_value_in_token_0']/ \
+                                                  (data_usd['base_position_value_in_token_0']+data_usd['limit_position_value_in_token_0']+data_usd['value_left_over_in_token_0'])).median(),
                         'mean_base_width'      : ((data_usd['base_range_upper']-data_usd['base_range_lower'])/data_usd['price_at_reset']).mean(),
                         'median_base_width'    : ((data_usd['base_range_upper']-data_usd['base_range_lower'])/data_usd['price_at_reset']).median(),        
                         'final_value'          : data_usd['value_position_usd'].iloc[-1]
@@ -515,7 +534,7 @@ def plot_position_composition(data_strategy):
     CHART_SIZE = 300
     fig_position_composition = go.Figure()
     fig_position_composition.add_trace(go.Scatter(
-        x=data_strategy['time'], y=data_strategy['base_position_value'],
+        x=data_strategy['time'], y=data_strategy['base_position_value_usd'],
         mode='lines',
         name='Base Position',
         line=dict(width=0.5, color='#ff0000'),
@@ -523,7 +542,7 @@ def plot_position_composition(data_strategy):
     #     groupnorm='percent'
     ))
     fig_position_composition.add_trace(go.Scatter(
-        x=data_strategy['time'], y=data_strategy['limit_position_value'],
+        x=data_strategy['time'], y=data_strategy['limit_position_value_usd'],
         mode='lines',
         name='Limit Position',
         line=dict(width=0.5, color='#6f6f6f'),
@@ -535,7 +554,7 @@ def plot_position_composition(data_strategy):
         height= CHART_SIZE,
         title = 'Base / Limit Values',
         xaxis_title="Date",
-        yaxis_title="Cumulative Value",
+        yaxis_title="USD Value",
         legend_title='Value'
     )
 
