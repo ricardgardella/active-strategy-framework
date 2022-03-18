@@ -236,12 +236,12 @@ class ResetStrategy:
             this_data['token_0_total']          = total_token_0 + strategy_observation.token_0_left_over + strategy_observation.token_0_fees_uncollected
             this_data['token_1_total']          = total_token_1 + strategy_observation.token_1_left_over + strategy_observation.token_1_fees_uncollected
 
-            # Value Variables
-            this_data['value_position']         = this_data['token_0_total'] + this_data['token_1_total']         / this_data['price']
-            this_data['value_allocated']        = this_data['token_0_allocated'] + this_data['token_1_allocated'] / this_data['price']
-            this_data['value_left_over']        = this_data['token_0_left_over'] + this_data['token_1_left_over'] / this_data['price']
+            # Value Variables          
+            this_data['value_position_in_token_0']         = this_data['token_0_total']     + this_data['token_1_total']     / this_data['price']
+            this_data['value_allocated_in_token_0']        = this_data['token_0_allocated'] + this_data['token_1_allocated'] / this_data['price']
+            this_data['value_left_over_in_token_0']        = this_data['token_0_left_over'] + this_data['token_1_left_over'] / this_data['price']
             
-            this_data['base_position_value']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] / this_data['price']
-            this_data['limit_position_value']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] / this_data['price']
+            this_data['base_position_value_in_token_0']    = strategy_observation.liquidity_ranges[0]['token_0'] + strategy_observation.liquidity_ranges[0]['token_1'] / this_data['price']
+            this_data['limit_position_value_in_token_0']   = strategy_observation.liquidity_ranges[1]['token_0'] + strategy_observation.liquidity_ranges[1]['token_1'] / this_data['price']
              
             return this_data
