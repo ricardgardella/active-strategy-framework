@@ -152,8 +152,8 @@ class StrategyObservation:
         
    
 ########################################################
-# Simulate reset strategy using a Pandas series called price_data, which has as an index
-# the time point, and contains the pool price (token 1 per token 0)
+# Simulate strategy using a pandas Series called price_data, which has as an index
+# the time point, and contains the pool price (token 1 per token 0) 
 ########################################################
 
 def simulate_strategy(price_data,swap_data,strategy_in,

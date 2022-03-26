@@ -11,7 +11,7 @@ from google.cloud import bigquery
 ##############################################################
 # Get Data from Google Bigquery's public blockcahin_etl dataset
 ##############################################################
-def download_bigquery_price(contract_address,date_begin,date_end):
+def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start):
 
     client = bigquery.Client()
 
@@ -19,20 +19,61 @@ def download_bigquery_price(contract_address,date_begin,date_end):
             SELECT *
             FROM blockchain-etl.ethereum_uniswap.UniswapV3Pool_event_Swap
             where contract_address = lower('"""+contract_address.lower()+"""') and
-              block_timestamp >= '"""+date_begin+"""' and block_timestamp <= '"""+date_end+"""'
+              block_timestamp >= '"""+str(date_begin)+"""' and block_timestamp <= '"""+str(date_end)+"""' and block_number >= """+str(block_start)+"""
             """
     query_job       = client.query(query)  # Make an API request.
     return query_job.to_dataframe(create_bqstorage_client=False)
 
-def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decimals_1):
+def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_start):
+    client = bigquery.Client()
+    query = '''SELECT
+      block_number,
+      transaction_index,
+      log_index,
+      block_hash,
+      transaction_hash,
+      address,
+      '0x' || RIGHT(topics[SAFE_OFFSET(1)],40) AS sender,
+      '0x' || RIGHT(topics[SAFE_OFFSET(1)],40) AS recipient,
+      '0x' || SUBSTR(DATA, 3, 64) AS amount0,
+      '0x' || SUBSTR(DATA, 67, 64) AS amount1,
+      '0x' || SUBSTR(DATA,131,64) AS sqrtPriceX96,
+      '0x' || SUBSTR(DATA,195,64) AS liquidity,
+      '0x' || SUBSTR(DATA,259,64) AS tick
+    FROM
+      public-data-finance.crypto_polygon.logs
+    WHERE
+      topics[SAFE_OFFSET(0)] = '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67'
+      AND DATE(block_timestamp) >=  DATE("'''+date_begin+'''")
+      AND DATE(block_timestamp) <=  DATE("'''+date_end+'''")
+      AND block_number          >=  '''+str(block_start)+'''
+      AND address = "'''+contract_address+'''"
+     '''
+    query_job       = client.query(query)  # Make an API request.
     
-    DECIMAL_ADJ                          = 10**(decimals_1  - decimals_0)
-    resulting_data                       = download_bigquery_price(contract_address,date_begin,date_end)
-    resulting_data['sqrtPriceX96_float'] = resulting_data['sqrtPriceX96'].astype(float)
-    resulting_data['quotePrice']         = ((resulting_data['sqrtPriceX96_float'] / 2**96) **2) / DECIMAL_ADJ
-    resulting_data['block_date']         = pd.to_datetime(resulting_data['block_timestamp'])
-    resulting_data['time']         = pd.to_datetime(resulting_data['block_timestamp'])
-    resulting_data = resulting_data.set_index('block_date').sort_index()
+    result = query_job.to_dataframe(create_bqstorage_client=False)
+    result['amount0']      = result['amount0'].apply(int,base=16)
+    result['amount1']      = result['amount1'].apply(int,base=16)
+    result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(int,base=16)
+    result['liquidity']    = result['liquidity'].apply(int,base=16)
+    result['tick']         = result['tick'].apply(int,base=16)
+
+    return result
+
+def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decimals_1,network='mainnet',block_start=0):
+    
+    if network == 'mainnet':
+        resulting_data                       = download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start)
+    elif network == 'polygon':
+        resulting_data                       = download_bigquery_price_polygon(contract_address,date_begin,date_end,block_start)
+    else:
+        raise ValueError('Unsupported Network:'+network)
+    
+    DECIMAL_ADJ                             = 10**(decimals_1  - decimals_0)
+    resulting_data['sqrtPriceX96_float']    = resulting_data['sqrtPriceX96'].astype(float)
+    resulting_data['quotePrice']            = ((resulting_data['sqrtPriceX96_float'] / 2**96) **2) / DECIMAL_ADJ
+    resulting_data['block_date']            = pd.to_datetime(resulting_data['block_timestamp'])
+    resulting_data                          = resulting_data.set_index('block_date',drop=False).sort_index()
 
     resulting_data['tick_swap']             = resulting_data['tick'].astype(int)
     resulting_data['amount0']               = resulting_data['amount0'].astype(float)
@@ -43,7 +84,7 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
     resulting_data['virtual_liquidity_adj'] = resulting_data['liquidity'].astype(float) / (10**((decimals_0  + decimals_1)/2))
     resulting_data['token_in']              = resulting_data.apply(lambda x: 'token0' if (x['amount0_adj'] < 0) else 'token1',axis=1)
     resulting_data['traded_in']             = resulting_data.apply(lambda x: -x['amount0_adj'] if (x['amount0_adj'] < 0) else -x['amount1_adj'],axis=1).astype(float)
-    
+
     return resulting_data
 
 ##############################################################
@@ -94,7 +135,7 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False,network='mainne
     return pd.DataFrame(request_swap)
 
 
-def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
+def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = True):
     
 
     if DOWNLOAD_DATA:        
@@ -111,7 +152,7 @@ def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = False):
     return stats_data
     
 
-def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DATA = False):
+def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DATA = True):
 
     # Download  events
     swap_data               = get_swap_data(contract_address,file_name,DOWNLOAD_DATA)
@@ -140,7 +181,7 @@ def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DA
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
-def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=False,exchange_to_query='Uniswap'):
+def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = True,RATE_LIMIT=False,exchange_to_query='Uniswap'):
 
     request = []
     max_rows_bitquery = 10000
@@ -188,7 +229,7 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
 
     return price_data
 
-def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = False,RATE_LIMIT=False,exchange_to_query='Uniswap'):
+def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = True ,RATE_LIMIT=False,exchange_to_query='Uniswap'):
 
     request = []
     max_rows_bitquery = 10000
