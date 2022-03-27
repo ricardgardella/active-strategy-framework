@@ -6,13 +6,13 @@ import importlib
 from itertools import compress
 import time
 import os
-from google.cloud import bigquery
+
 
 ##############################################################
 # Get Data from Google Bigquery's public blockcahin_etl dataset
 ##############################################################
 def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start):
-
+    from google.cloud import bigquery
     client = bigquery.Client()
 
     query = """
@@ -25,6 +25,7 @@ def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_s
     return query_job.to_dataframe(create_bqstorage_client=False)
 
 def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_start):
+    from google.cloud import bigquery
     client = bigquery.Client()
     query = '''SELECT
       block_number,
@@ -106,7 +107,7 @@ def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:
     response = requests.post(univ3_graph_url, json=params)
     return response.json()
 
-def get_swap_data(contract_address,file_name,DOWNLOAD_DATA=False,network='mainnet'):        
+def get_swap_data(contract_address,file_name,DOWNLOAD_DATA = True,network='mainnet'):        
         
     request_swap = [] 
     
