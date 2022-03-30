@@ -34,6 +34,7 @@ def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_s
       block_hash,
       transaction_hash,
       address,
+      block_timestamp,
       '0x' || RIGHT(topics[SAFE_OFFSET(1)],40) AS sender,
       '0x' || RIGHT(topics[SAFE_OFFSET(1)],40) AS recipient,
       '0x' || SUBSTR(DATA, 3, 64) AS amount0,
