@@ -54,12 +54,6 @@ def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_s
     query_job       = client.query(query)  # Make an API request.
     
     result = query_job.to_dataframe(create_bqstorage_client=False)
-
-#     result['amount0']      = result['amount0'].apply(int,base=16)
-#     result['amount1']      = result['amount1'].apply(int,base=16)
-#     result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(int,base=16)
-#     result['liquidity']    = result['liquidity'].apply(int,base=16)
-#     result['tick']         = result['tick'].apply(int,base=16)
     result['amount0']      = result['amount0'].apply(signed_int)
     result['amount1']      = result['amount1'].apply(signed_int)
     result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(signed_int)
@@ -72,9 +66,9 @@ def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_s
 def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decimals_1,network='mainnet',block_start=0):
     
     if network == 'mainnet':
-        resulting_data                       = download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start)
+        resulting_data                       = download_bigquery_price_mainnet(contract_address.lower(),date_begin,date_end,block_start)
     elif network == 'polygon':
-        resulting_data                       = download_bigquery_price_polygon(contract_address,date_begin,date_end,block_start)
+        resulting_data                       = download_bigquery_price_polygon(contract_address.lower(),date_begin,date_end,block_start)
     else:
         raise ValueError('Unsupported Network:'+network)
     
