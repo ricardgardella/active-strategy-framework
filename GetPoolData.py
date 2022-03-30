@@ -6,7 +6,7 @@ import importlib
 from itertools import compress
 import time
 import os
-
+import math
 
 ##############################################################
 # Get Data from Google Bigquery's public blockcahin_etl dataset
@@ -54,11 +54,18 @@ def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_s
     query_job       = client.query(query)  # Make an API request.
     
     result = query_job.to_dataframe(create_bqstorage_client=False)
-    result['amount0']      = result['amount0'].apply(int,base=16)
-    result['amount1']      = result['amount1'].apply(int,base=16)
-    result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(int,base=16)
-    result['liquidity']    = result['liquidity'].apply(int,base=16)
-    result['tick']         = result['tick'].apply(int,base=16)
+
+#     result['amount0']      = result['amount0'].apply(int,base=16)
+#     result['amount1']      = result['amount1'].apply(int,base=16)
+#     result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(int,base=16)
+#     result['liquidity']    = result['liquidity'].apply(int,base=16)
+#     result['tick']         = result['tick'].apply(int,base=16)
+    result['amount0']      = result['amount0'].apply(signed_int)
+    result['amount1']      = result['amount1'].apply(signed_int)
+    result['sqrtPriceX96'] = result['sqrtPriceX96'].apply(signed_int)
+    result['liquidity']    = result['liquidity'].apply(signed_int)
+    result['tick']         = result['tick'].apply(signed_int)
+
 
     return result
 
@@ -89,6 +96,10 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
 
     return resulting_data
 
+def signed_int(h):
+    s = bytes.fromhex(h[2:])
+    i = int.from_bytes(s, 'big', signed=True)
+    return i
 ##############################################################
 # Get all swaps from the Graph and Virtual Liquidity from flipside
 ##############################################################
