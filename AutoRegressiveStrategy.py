@@ -202,9 +202,13 @@ class AutoRegressiveStrategy:
         if np.abs(model_forecast['return_forecast']) > self.return_forecast_cutoff:
                     model_forecast['return_forecast'] = np.sign(model_forecast['return_forecast']) * self.return_forecast_cutoff
                 
-        # If error in volatility computtion use last
+        # If error in volatility computation use last or overall standard deviation of returns
         if np.isnan(model_forecast['sd_forecast']):
-            model_forecast['sd_forecast'] = current_strat_obs.liquidity_ranges[0]['volatility']
+            if hasattr(current_strat_obs,'liquidity_ranges'):
+                model_forecast['sd_forecast']  = current_strat_obs.liquidity_ranges[0]['volatility']
+            else:
+                model_forecast['sd_forecast'] = self.model_data.quotePrice.pct_change().std()
+
                 
         target_price     = (1 + model_forecast['return_forecast']) * current_strat_obs.price
 
