@@ -9,9 +9,16 @@ import os
 import math
 
 ##############################################################
-# Get Data from Google Bigquery's public blockcahin_etl dataset
+# Pull Uniswap v3 pool data from Google Bigquery
+# Have options for Ethereum Mainnet and Polygon
 ##############################################################
 def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start):
+    """
+    Internal function to query Google Bigquery for the swap history of a Uniswap v3 pool between two dates starting from a particular block from Ethereum Mainnet. 
+    Use GetPoolData.get_pool_data_bigquery which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
+    
+    
     from google.cloud import bigquery
     client = bigquery.Client()
 
@@ -25,6 +32,11 @@ def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_s
     return query_job.to_dataframe(create_bqstorage_client=False)
 
 def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_start):
+    """
+    Internal function to query Google Bigquery for the swap history of a Uniswap v3 pool between two dates starting from a particular block from Polygon. 
+    Use GetPoolData.get_pool_data_bigquery which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
+    
     from google.cloud import bigquery
     client = bigquery.Client()
     query = '''SELECT
@@ -65,6 +77,11 @@ def download_bigquery_price_polygon(contract_address,date_begin,date_end,block_s
 
 def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decimals_1,network='mainnet',block_start=0):
     
+    """
+    Queries Google Bigquery for the swap history of a Uniswap v3 pool between two dates starting from a particular block from either Ethereum Mainnet or Polygon.
+    Preprocesses data to have decimal adjusted amounts and liquidity values.
+    """
+    
     if network == 'mainnet':
         resulting_data                       = download_bigquery_price_mainnet(contract_address.lower(),date_begin,date_end,block_start)
     elif network == 'polygon':
@@ -91,14 +108,22 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
     return resulting_data
 
 def signed_int(h):
+    """
+    Converts hex values to signed integers.
+    """
     s = bytes.fromhex(h[2:])
     i = int.from_bytes(s, 'big', signed=True)
     return i
+
 ##############################################################
-# Get all swaps from the Graph and Virtual Liquidity from flipside
+# Get Swaps from Uniswap v3's subgraph, and liquidity at each swap from Flipside Crypto
 ##############################################################
 
-def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:
+def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:    
+    """
+    Internal function to query The Graph's Uniswap v3 subgraph on either mainnet or arbitrum. 
+    Use GetPoolData.get_pool_data_flipside which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
     
     if network == 'mainnet':
         univ3_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
@@ -113,7 +138,11 @@ def query_univ3_graph(query: str, variables=None,network='mainnet') -> dict:
     response = requests.post(univ3_graph_url, json=params)
     return response.json()
 
-def get_swap_data(contract_address,file_name,DOWNLOAD_DATA = True,network='mainnet'):        
+def get_swap_data(contract_address,file_name,DOWNLOAD_DATA = True,network='mainnet'):       
+    """
+    Internal function to query full history of swap data from Uniswap v3's subgraph.
+    Use GetPoolData.get_pool_data_flipside which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
         
     request_swap = [] 
     
@@ -143,7 +172,10 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA = True,network='mainn
 
 
 def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = True):
-    
+    """
+    Internal function to query full history of liquidity values from Flipside Crypto's Uniswap v3's databases.
+    Use GetPoolData.get_pool_data_flipside which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
 
     if DOWNLOAD_DATA:        
         request_stats    = [pd.DataFrame(requests.get(x).json()) for x in flipside_query]
@@ -160,6 +192,9 @@ def get_liquidity_flipside(flipside_query,file_name,DOWNLOAD_DATA = True):
     
 
 def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DATA = True):
+    """
+    Queries Uniswap v3's subgraph for swap data and Flipside Crypto's queries to find liquidity in order to conduct simulations using the Active Strategy Framework.
+    """
 
     # Download  events
     swap_data               = get_swap_data(contract_address,file_name,DOWNLOAD_DATA)
@@ -185,11 +220,192 @@ def get_pool_data_flipside(contract_address,flipside_query,file_name,DOWNLOAD_DA
     
     return full_data
 
+def generate_event_payload(event,address,n_query):
+        payload =   '''
+            query($paginateId: String!){
+              pool(id:"'''+address+'''"){
+                '''+event+'''(
+                  first: '''+n_query+'''
+                  orderBy: id
+                  orderDirection: asc
+                  where: {
+                    id_gt: $paginateId
+                  }
+                ) {
+                  id
+                  timestamp
+                  tick
+                  amount0
+                  amount1
+                  amountUSD
+                }
+              }
+            }'''
+        return payload
+    
+def generate_first_event_payload(event,address):
+        payload = '''query{
+                      pool(id:"'''+address+'''"){
+                      '''+event+'''(
+                      first: 1
+                      orderBy: id
+                      orderDirection: asc
+                        ) {
+                          id
+                          timestamp
+                          tick
+                          amount0
+                          amount1
+                          amountUSD
+                        }
+                      }
+                    }'''
+        return payload
+
+##########################
+# Uniswap v2
+##########################
+
+
+def query_univ2_graph(query: str, variables=None) -> dict:
+    """
+    Internal function to query The Graph's Uniswap v2 subgraph on mainnet.
+    Use GetPoolData.get_swap_data_univ2 which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
+    
+    univ2_graph_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v2'
+        
+    if variables:
+        params = {'query': query, 'variables': variables}
+    else:
+        params = {'query': query}
+        
+    response = requests.post(univ2_graph_url, json=params)
+    
+    return response.json()
+
+def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):
+    """
+    Internal function to query the history of swap data from Uniswap v2's subgraph between begin_date and end_date.
+    Use GetPoolData.get_swap_data_univ2 which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
+    """
+        
+    request_swap = [] 
+    
+    if DOWNLOAD_DATA:
+
+        current_payload = generate_first_swap_univ2_payload(contract_address,date_begin,date_end)
+        current_id      = query_univ2_graph(current_payload)['data']['swaps'][0]['id']
+        finished        = False
+
+        while not finished:
+            current_payload = generate_swap_univ2_payload(contract_address,date_begin,date_end,str(1000))
+            response        = query_univ2_graph(current_payload,variables={'paginateId':current_id})['data']['swaps']
+
+            if len(response) == 0:
+                finished = True
+            else:
+                current_id = response[-1]['id']
+                request_swap.extend(response)
+                
+            with open('./data/'+file_name+'_swap_v2.pkl', 'wb') as output:
+                pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
+    else:
+        with open('./data/'+file_name+'_swap_v2.pkl', 'rb') as input:
+            request_swap = pickle.load(input)
+           
+    return pd.DataFrame(request_swap)
+
+
+def get_swap_data_univ2(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):    
+    """
+    Queries Uniswap v2's subgraph for swap data in order to conduct simulations using the Active Strategy Framework.
+    """
+    
+    swap_data               = download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA)
+    swap_data['time_pd']    = pd.to_datetime(swap_data['timestamp'], unit='s', origin='unix',utc=True)
+    swap_data               = swap_data.set_index('time_pd',drop=False)
+    swap_data               = swap_data.sort_index()
+    
+    swap_data['token_in']   = swap_data.apply(lambda x: 'token0' if float(x['amount0In']) > 0 else 'token1',axis=1)
+    swap_data['amount0']    = swap_data.apply(lambda x: -float(x['amount0In'])  if x['token_in'] == 'token0'  else float(x['amount0Out']),axis=1)
+    swap_data['amount1']    = swap_data.apply(lambda x:  float(x['amount1Out']) if x['token_in'] == 'token0'  else -float(x['amount1In']),axis=1)
+    swap_data['traded_in']  = swap_data.apply(lambda x: -x['amount0'] if (x['amount0'] < 0) else -x['amount1'],axis=1).astype(float)
+
+    return swap_data
+
+def generate_swap_univ2_payload(address,date_begin,date_end,n_query):
+    """
+    Internal function that generates GraphQL queries to to query The Graph's Uniswap v2 subgraph on mainnet.
+    """
+    
+        date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
+        date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
+    
+        payload =   '''
+            query($paginateId: String!){                   
+              swaps(
+              first: '''+n_query+'''
+              orderBy: id
+              orderDirection: asc
+              where:{
+                  pair:"'''+address+'''", 
+                  id_gt: $paginateId,
+                  timestamp_gte:"''' +date_begin_fmt+'''",
+                  timestamp_lte:"''' +date_end_fmt+'''"
+                  }
+                ) {
+                  id
+                  timestamp
+                  amount0In
+                  amount1In
+                  amount0Out
+                  amount1Out
+                  amountUSD
+                }
+              }'''
+        
+        return payload
+    
+def generate_first_swap_univ2_payload(address,date_begin,date_end):
+    """
+    Internal function that generates GraphQL queries to to query The Graph's Uniswap v2 subgraph on mainnet.
+    """
+    
+        date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
+        date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
+    
+        payload = '''query{                   
+                          swaps(
+                          first: 1
+                          orderBy: id
+                          orderDirection: asc
+                          where:{pair:"'''+address+'''",
+                                 timestamp_gte:''' +date_begin_fmt+''',
+                                 timestamp_lte:''' +date_end_fmt+'''}
+                            ) {
+                              id
+                              timestamp
+                              amount0In
+                              amount1In
+                              amount0Out
+                              amount1Out
+                              amountUSD
+                            }
+                          }'''
+        
+        return payload
+
+
+
+
 ##############################################################
 # Get Price Data from Bitquery
 ##############################################################
 def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = True,RATE_LIMIT=False,exchange_to_query='Uniswap'):
-
+    """
+    Queries the price history of a pair of ERC20's (located at token_0_address and token_1_address) in exchange_to_query (defaults to all Uniswap versions on mainnet) between begin_date and end_date on Bitquery.
+    """
     request = []
     max_rows_bitquery = 10000
     
@@ -237,6 +453,9 @@ def get_price_data_bitquery(token_0_address,token_1_address,date_begin,date_end,
     return price_data
 
 def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file_name,DOWNLOAD_DATA = True ,RATE_LIMIT=False,exchange_to_query='Uniswap'):
+    """
+    Queries the price history of an ERC20 + USD Stablecoins (located at token_address) in exchange_to_query (defaults to all Uniswap versions on mainnet) between begin_date and end_date on Bitquery.
+    """
 
     request = []
     max_rows_bitquery = 10000
@@ -281,48 +500,6 @@ def get_price_usd_data_bitquery(token_address,date_begin,date_end,api_token,file
     price_data            = price_data.set_index('time_pd')
 
     return price_data
-
-def generate_event_payload(event,address,n_query):
-        payload =   '''
-            query($paginateId: String!){
-              pool(id:"'''+address+'''"){
-                '''+event+'''(
-                  first: '''+n_query+'''
-                  orderBy: id
-                  orderDirection: asc
-                  where: {
-                    id_gt: $paginateId
-                  }
-                ) {
-                  id
-                  timestamp
-                  tick
-                  amount0
-                  amount1
-                  amountUSD
-                }
-              }
-            }'''
-        return payload
-    
-def generate_first_event_payload(event,address):
-        payload = '''query{
-                      pool(id:"'''+address+'''"){
-                      '''+event+'''(
-                      first: 1
-                      orderBy: id
-                      orderDirection: asc
-                        ) {
-                          id
-                          timestamp
-                          tick
-                          amount0
-                          amount1
-                          amountUSD
-                        }
-                      }
-                    }'''
-        return payload
 
 def generate_price_payload(token_0_address,token_1_address,date_begin,date_end,offset,exchange_to_query='Uniswap'):
     payload =   '''{
@@ -389,14 +566,12 @@ def generate_usd_price_payload(token_address,date_begin,date_end,offset,exchange
                 }'''
     
     return payload
+    
 
-
-
-
-##############################################################
-# A simple function to use requests.post to make the API call
-##############################################################
 def run_bitquery_query(query,api_token):  
+    """
+    Internal function that runs a GraphQL query on Bitquery.
+    """
     url       = 'https://graphql.bitquery.io/'
     headers = {'X-API-KEY': api_token}
     request = requests.post(url,
