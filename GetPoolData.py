@@ -339,62 +339,62 @@ def generate_swap_univ2_payload(address,date_begin,date_end,n_query):
     Internal function that generates GraphQL queries to to query The Graph's Uniswap v2 subgraph on mainnet.
     """
     
-        date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
-        date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
-    
-        payload =   '''
-            query($paginateId: String!){                   
-              swaps(
-              first: '''+n_query+'''
-              orderBy: id
-              orderDirection: asc
-              where:{
-                  pair:"'''+address+'''", 
-                  id_gt: $paginateId,
-                  timestamp_gte:"''' +date_begin_fmt+'''",
-                  timestamp_lte:"''' +date_end_fmt+'''"
-                  }
-                ) {
-                  id
-                  timestamp
-                  amount0In
-                  amount1In
-                  amount0Out
-                  amount1Out
-                  amountUSD
-                }
-              }'''
-        
-        return payload
+    date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
+    date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
+
+    payload =   '''
+        query($paginateId: String!){                   
+          swaps(
+          first: '''+n_query+'''
+          orderBy: id
+          orderDirection: asc
+          where:{
+              pair:"'''+address+'''", 
+              id_gt: $paginateId,
+              timestamp_gte:"''' +date_begin_fmt+'''",
+              timestamp_lte:"''' +date_end_fmt+'''"
+              }
+            ) {
+              id
+              timestamp
+              amount0In
+              amount1In
+              amount0Out
+              amount1Out
+              amountUSD
+            }
+          }'''
+
+    return payload
     
 def generate_first_swap_univ2_payload(address,date_begin,date_end):
     """
     Internal function that generates GraphQL queries to to query The Graph's Uniswap v2 subgraph on mainnet.
     """
     
-        date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
-        date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
-    
-        payload = '''query{                   
-                          swaps(
-                          first: 1
-                          orderBy: id
-                          orderDirection: asc
-                          where:{pair:"'''+address+'''",
-                                 timestamp_gte:''' +date_begin_fmt+''',
-                                 timestamp_lte:''' +date_end_fmt+'''}
-                            ) {
-                              id
-                              timestamp
-                              amount0In
-                              amount1In
-                              amount0Out
-                              amount1Out
-                              amountUSD
-                            }
-                          }'''
-        
-        return payload
+    date_begin_fmt = str(int(pd.Timestamp(date_begin).timestamp()))
+    date_end_fmt   = str(int(pd.Timestamp(date_end).timestamp()))
+
+    payload = '''query{                   
+                      swaps(
+                      first: 1
+                      orderBy: id
+                      orderDirection: asc
+                      where:{pair:"'''+address+'''",
+                             timestamp_gte:''' +date_begin_fmt+''',
+                             timestamp_lte:''' +date_end_fmt+'''}
+                        ) {
+                          id
+                          timestamp
+                          amount0In
+                          amount1In
+                          amount0Out
+                          amount1Out
+                          amountUSD
+                        }
+                      }'''
+
+    return payload
 
 
 
