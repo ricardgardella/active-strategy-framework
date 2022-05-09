@@ -97,8 +97,8 @@ class AutoRegressiveStrategy:
     def check_strategy(self,current_strat_obs):
         
         model_forecast      = None
-        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] + current_strat_obs.liquidity_ranges[1]['token_1'] / current_strat_obs.price
-        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] + current_strat_obs.liquidity_ranges[0]['token_1'] / current_strat_obs.price
+        LIMIT_ORDER_BALANCE = current_strat_obs.liquidity_ranges[1]['token_0'] * current_strat_obs.price + current_strat_obs.liquidity_ranges[1]['token_1']  
+        BASE_ORDER_BALANCE  = current_strat_obs.liquidity_ranges[0]['token_0'] * current_strat_obs.price + current_strat_obs.liquidity_ranges[0]['token_1']  
         
         if not 'last_vol_check' in current_strat_obs.strategy_info:
             current_strat_obs.strategy_info['last_vol_check'] = current_strat_obs.time
