@@ -284,7 +284,7 @@ def query_univ2_graph(query: str, variables=None) -> dict:
     
     return response.json()
 
-def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):
+def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA,RATE_LIMIT):
     """
     Internal function to query the history of swap data from Uniswap v2's subgraph between begin_date and end_date.
     Use GetPoolData.get_swap_data_univ2 which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
@@ -308,6 +308,9 @@ def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,
                 current_id = response[-1]['id']
                 request_swap.extend(response)
                 
+            if RATE_LIMIT:
+                time.sleep(5)
+                
             with open('./data/'+file_name+'_swap_v2.pkl', 'wb') as output:
                 pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
     else:
@@ -317,12 +320,12 @@ def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,
     return pd.DataFrame(request_swap)
 
 
-def get_swap_data_univ2(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):    
+def get_swap_data_univ2(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True,RATE_LIMIT=False):    
     """
     Queries Uniswap v2's subgraph for swap data in order to conduct simulations using the Active Strategy Framework.
     """
     
-    swap_data               = download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA)
+    swap_data               = download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA,RATE_LIMIT)
     swap_data['time_pd']    = pd.to_datetime(swap_data['timestamp'], unit='s', origin='unix',utc=True)
     swap_data               = swap_data.set_index('time_pd',drop=False)
     swap_data               = swap_data.sort_index()
