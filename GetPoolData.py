@@ -12,7 +12,7 @@ import math
 # Pull Uniswap v3 pool data from Google Bigquery
 # Have options for Ethereum Mainnet and Polygon
 ##############################################################
-def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start):
+def download_bigquery_swap_data(contract_address,date_begin,date_end,block_start,network='ethereum'):
     """
     Internal function to query Google Bigquery for the swap history of a Uniswap v3 pool between two dates starting from a particular block from Ethereum Mainnet. 
     Use GetPoolData.get_pool_data_bigquery which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
@@ -24,7 +24,7 @@ def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_s
 
     query = """
             SELECT *
-            FROM blockchain-etl.ethereum_uniswap.UniswapV3Pool_event_Swap
+            FROM blockchain-etl."""+network+"""_uniswap.UniswapV3Pool_event_Swap
             where contract_address = lower('"""+contract_address.lower()+"""') and
               block_timestamp >= '"""+str(date_begin)+"""' and block_timestamp <= '"""+str(date_end)+"""' and block_number >= """+str(block_start)+"""
             """
@@ -83,9 +83,9 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
     """
     
     if network == 'mainnet':
-        resulting_data                       = download_bigquery_price_mainnet(contract_address.lower(),date_begin,date_end,block_start)
+        resulting_data                       = download_bigquery_swap_data(contract_address.lower(),date_begin,date_end,block_start)
     elif network == 'polygon':
-        resulting_data                       = download_bigquery_price_polygon(contract_address.lower(),date_begin,date_end,block_start)
+        resulting_data                       = download_bigquery_swap_data(contract_address.lower(),date_begin,date_end,block_start,network=network)
     else:
         raise ValueError('Unsupported Network:'+network)
     
