@@ -3,6 +3,7 @@ import numpy as np
 import math
 import UNI_v3_funcs
 import copy
+import kaleido
 
 class StrategyObservation:
     def __init__(self,timepoint,
@@ -38,7 +39,6 @@ class StrategyObservation:
         self.token_0_fees_uncollected    = token_0_fees_uncollected
         self.token_1_fees_uncollected    = token_1_fees_uncollected
         self.reset_point                 = False
-        self.compound_point              = False
         self.reset_reason                = ''
         self.decimal_adjustment          = 10**(self.decimals_1  - self.decimals_0)
         self.tickSpacing                 = int(self.fee_tier*2*10000)   
@@ -307,7 +307,6 @@ def analyze_strategy(data_usd,frequency = 'M'):
                         'net_apr'              : net_apr,
                         'net_return'           : float(strategy_last_obs['value_position_usd']/initial_position_value  - 1),
                         'rebalances'           : data_usd['reset_point'].sum(),
-                        'compounds'            : data_usd['compound_point'].sum(),
                         'max_drawdown'         : ( data_usd['value_position_usd'].max() - data_usd['value_position_usd'].min() ) / data_usd['value_position_usd'].max(),
                         'volatility'           : ((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)),
                         'sharpe_ratio'         : float(net_apr / (((data_usd['value_position_usd'].pct_change().var())**(0.5)) * ((annualization_factor)**(0.5)))),

@@ -12,7 +12,7 @@ import math
 # Pull Uniswap v3 pool data from Google Bigquery
 # Have options for Ethereum Mainnet and Polygon
 ##############################################################
-def download_bigquery_swap_data(contract_address,date_begin,date_end,block_start,network='ethereum'):
+def download_bigquery_price_mainnet(contract_address,date_begin,date_end,block_start):
     """
     Internal function to query Google Bigquery for the swap history of a Uniswap v3 pool between two dates starting from a particular block from Ethereum Mainnet. 
     Use GetPoolData.get_pool_data_bigquery which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
@@ -24,7 +24,7 @@ def download_bigquery_swap_data(contract_address,date_begin,date_end,block_start
 
     query = """
             SELECT *
-            FROM blockchain-etl."""+network+"""_uniswap.UniswapV3Pool_event_Swap
+            FROM blockchain-etl.ethereum_uniswap.UniswapV3Pool_event_Swap
             where contract_address = lower('"""+contract_address.lower()+"""') and
               block_timestamp >= '"""+str(date_begin)+"""' and block_timestamp <= '"""+str(date_end)+"""' and block_number >= """+str(block_start)+"""
             """
@@ -83,9 +83,9 @@ def get_pool_data_bigquery(contract_address,date_begin,date_end,decimals_0,decim
     """
     
     if network == 'mainnet':
-        resulting_data                       = download_bigquery_swap_data(contract_address.lower(),date_begin,date_end,block_start)
+        resulting_data                       = download_bigquery_price_mainnet(contract_address.lower(),date_begin,date_end,block_start)
     elif network == 'polygon':
-        resulting_data                       = download_bigquery_swap_data(contract_address.lower(),date_begin,date_end,block_start,network=network)
+        resulting_data                       = download_bigquery_price_polygon(contract_address.lower(),date_begin,date_end,block_start)
     else:
         raise ValueError('Unsupported Network:'+network)
     
@@ -153,17 +153,23 @@ def get_swap_data(contract_address,file_name,DOWNLOAD_DATA = True,network='mainn
         finished        = False
 
         while not finished:
-            current_payload = generate_event_payload('swaps',contract_address,str(1000))
-            response        = query_univ3_graph(current_payload,variables={'paginateId':current_id},network=network)['data']['pool']['swaps']
-
-            if len(response) == 0:
-                finished = True
+            for attempt in range(10):
+              current_payload = generate_event_payload('swaps',contract_address,str(1000))
+              try:
+                response  = query_univ3_graph(current_payload,variables={'paginateId':current_id},network=network)
+                response = response['data']['pool']['swaps']
+              except Exception:
+                continue
+              if len(response) == 0:
+                  finished = True
+              else:
+                  current_id = response[-1]['id']
+                  request_swap.extend(response)
+              with open('./data/'+file_name+'_swap.pkl', 'wb') as output:
+                  pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
+              break
             else:
-                current_id = response[-1]['id']
-                request_swap.extend(response)
-                
-            with open('./data/'+file_name+'_swap.pkl', 'wb') as output:
-                pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
+                raise Exception('More than 10 failures')
     else:
         with open('./data/'+file_name+'_swap.pkl', 'rb') as input:
             request_swap = pickle.load(input)
@@ -284,7 +290,7 @@ def query_univ2_graph(query: str, variables=None) -> dict:
     
     return response.json()
 
-def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA,RATE_LIMIT):
+def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):
     """
     Internal function to query the history of swap data from Uniswap v2's subgraph between begin_date and end_date.
     Use GetPoolData.get_swap_data_univ2 which preprocesses the data in order to conduct simualtions with the Active Strategy Framework.
@@ -308,9 +314,6 @@ def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,
                 current_id = response[-1]['id']
                 request_swap.extend(response)
                 
-            if RATE_LIMIT:
-                time.sleep(5)
-                
             with open('./data/'+file_name+'_swap_v2.pkl', 'wb') as output:
                 pickle.dump(request_swap, output, pickle.HIGHEST_PROTOCOL)
     else:
@@ -320,12 +323,12 @@ def download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,
     return pd.DataFrame(request_swap)
 
 
-def get_swap_data_univ2(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True,RATE_LIMIT=False):    
+def get_swap_data_univ2(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA = True):    
     """
     Queries Uniswap v2's subgraph for swap data in order to conduct simulations using the Active Strategy Framework.
     """
     
-    swap_data               = download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA,RATE_LIMIT)
+    swap_data               = download_swap_univ2_subgraph(contract_address,file_name,date_begin,date_end,DOWNLOAD_DATA)
     swap_data['time_pd']    = pd.to_datetime(swap_data['timestamp'], unit='s', origin='unix',utc=True)
     swap_data               = swap_data.set_index('time_pd',drop=False)
     swap_data               = swap_data.sort_index()
